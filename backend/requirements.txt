@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic[email]
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt<4.1
+python-multipart
+pymupdf
+pandas
+numpy
+scikit-learn
+google-generativeai
+pytest
+httpx

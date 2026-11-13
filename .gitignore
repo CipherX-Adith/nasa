@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+backend/.venv/
+.venv/
+venv/
+ENV/
+
+# Production build artifacts
+dist/
+build/
+*.tsbuildinfo
+
+# Python cache & test artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+backend/__pycache__/
+backend/app/__pycache__/
+backend/tests/__pycache__/
+.pytest_cache/
+
+# Local databases & runtime files
+backend/orbitcare.db
+*.sqlite
+*.sqlite3
+*.db
+
+# Environment variables & local configuration
+backend/.env
+.env
+.env.local
+.env.*.local
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
