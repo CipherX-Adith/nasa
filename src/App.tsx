@@ -178,20 +178,6 @@ export default function App() {
     if (tab === 'Behavioural') {
       return ['Sleep duration', 'Fatigue', 'Sleep quality', 'Stress', 'Mood'];
     }
-    if (tab === 'Crew health') {
-      return [
-        'Heart Rate',
-        'HRV',
-        'Systolic BP',
-        'Core Temp',
-        'Grip',
-        'Body mass',
-        'Sleep duration',
-        'Fatigue',
-        'Cabin CO2',
-        'Radiation dose rate',
-      ];
-    }
     // Overview tab: features all primary vital metrics from the reference screenshot
     return ['Heart Rate', 'HRV', 'Systolic BP', 'Core Temp', 'Grip', 'Sleep duration', 'Fatigue'];
   }, [tab]);
@@ -668,7 +654,6 @@ export default function App() {
         <nav>
           {[
             [LayoutDashboard, 'Overview'],
-            [Users, 'Crew health'],
             [HeartPulse, 'Cardiovascular'],
             [Wind, 'Behavioural'],
             [Clock3, 'Mission timeline'],
@@ -826,11 +811,10 @@ export default function App() {
             </div>
           )}
 
-          {/* DYNAMIC TELEMETRY CARD: Always featured when on Overview, Cardiovascular, Behavioural, or Crew Health */}
+          {/* DYNAMIC TELEMETRY CARD: Featured on Overview, Cardiovascular, or Behavioural */}
           {(tab === 'Overview' ||
             tab === 'Cardiovascular' ||
-            tab === 'Behavioural' ||
-            tab === 'Crew health') &&
+            tab === 'Behavioural') &&
             renderTelemetryCard()}
 
           {/* OVERVIEW TAB CONTENT */}
@@ -951,9 +935,12 @@ export default function App() {
                     </div>
                     <button
                       className="text-button"
-                      onClick={() => handleTabChange('Crew health')}
+                      onClick={() => {
+                        const el = document.getElementById('measurements-table');
+                        el?.scrollIntoView({ behavior: 'smooth' });
+                      }}
                     >
-                      All measurements →
+                      All measurements ↓
                     </button>
                   </div>
                   <div className="domain-grid">
@@ -1020,6 +1007,72 @@ export default function App() {
                         </button>
                       );
                     })}
+                  </div>
+                </section>
+              </div>
+
+              <div id="measurements-table" style={{ marginTop: '16px' }}>
+                <section className="panel table-panel">
+                  <div className="panel-head">
+                    <div>
+                      <div className="eyebrow">CREW HEALTH RECORDS</div>
+                      <h2>Measurements & Baselines</h2>
+                      <p className="muted">
+                        Click any measurement row below to visualize its 60-day adaptive
+                        trend graph above.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>DOMAIN</th>
+                          <th>MEASUREMENT</th>
+                          <th>VALUE</th>
+                          <th>PERSONAL MEDIAN</th>
+                          <th>OBSERVATIONS</th>
+                          <th>SOURCE</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {baselines.map((b: Any) => {
+                          const isSelected =
+                            metricMap[selectedMetric] === b.metric ||
+                            selectedMetric === b.metric;
+                          return (
+                            <tr
+                              key={b.metric}
+                              className={`table-row-clickable ${
+                                isSelected ? 'active' : ''
+                              }`}
+                              onClick={() => {
+                                const pill =
+                                  Object.keys(metricMap).find(
+                                    (k) => metricMap[k] === b.metric
+                                  ) || b.metric;
+                                setSelectedMetric(pill);
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }}
+                            >
+                              <td>{b.domain}</td>
+                              <td>
+                                <b>{b.metric}</b>
+                              </td>
+                              <td>
+                                {latest(b.metric)?.value} {b.unit}
+                              </td>
+                              <td>
+                                {b.available ? b.median : 'Insufficient history'}{' '}
+                                {b.available ? b.unit : ''}
+                              </td>
+                              <td>{b.count}</td>
+                              <td>Simulated mission telemetry</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </section>
               </div>
@@ -1136,73 +1189,6 @@ export default function App() {
                 >
                   <Plus size={15} /> Submit assessment
                 </button>
-              </div>
-            </section>
-          )}
-
-          {/* CREW HEALTH TAB CONTENT */}
-          {tab === 'Crew health' && (
-            <section className="panel table-panel" style={{ marginTop: '16px' }}>
-              <div className="panel-head">
-                <div>
-                  <div className="eyebrow">AVAILABLE RECORDS</div>
-                  <h2>Measurements & Baselines</h2>
-                  <p className="muted">
-                    Click any measurement row below to visualize its 60-day adaptive
-                    trend graph above.
-                  </p>
-                </div>
-              </div>
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>DOMAIN</th>
-                      <th>MEASUREMENT</th>
-                      <th>VALUE</th>
-                      <th>PERSONAL MEDIAN</th>
-                      <th>OBSERVATIONS</th>
-                      <th>SOURCE</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {baselines.map((b: Any) => {
-                      const isSelected =
-                        metricMap[selectedMetric] === b.metric ||
-                        selectedMetric === b.metric;
-                      return (
-                        <tr
-                          key={b.metric}
-                          className={`table-row-clickable ${
-                            isSelected ? 'active' : ''
-                          }`}
-                          onClick={() => {
-                            // Find corresponding pill or set metric directly
-                            const pill =
-                              Object.keys(metricMap).find(
-                                (k) => metricMap[k] === b.metric
-                              ) || b.metric;
-                            setSelectedMetric(pill);
-                          }}
-                        >
-                          <td>{b.domain}</td>
-                          <td>
-                            <b>{b.metric}</b>
-                          </td>
-                          <td>
-                            {latest(b.metric)?.value} {b.unit}
-                          </td>
-                          <td>
-                            {b.available ? b.median : 'Insufficient history'}{' '}
-                            {b.available ? b.unit : ''}
-                          </td>
-                          <td>{b.count}</td>
-                          <td>Simulated mission telemetry</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
               </div>
             </section>
           )}
