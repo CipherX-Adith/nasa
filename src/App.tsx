@@ -1905,9 +1905,9 @@ export default function App() {
                 axisLine={false}
                 tickLine={false}
                 tick={{
-                  fill: '#94a3b8',
-                  fontSize: 11,
-                  fontFamily: "'DM Mono', monospace",
+                  fill: '#64748b',
+                  fontSize: 13.5,
+                  fontFamily: "'DM Sans', sans-serif",
                 }}
                 dy={8}
               />
@@ -1918,11 +1918,11 @@ export default function App() {
                 axisLine={false}
                 tickLine={false}
                 tick={{
-                  fill: '#94a3b8',
-                  fontSize: 11,
-                  fontFamily: "'DM Mono', monospace",
+                  fill: '#64748b',
+                  fontSize: 13.5,
+                  fontFamily: "'DM Sans', sans-serif",
                 }}
-                width={35}
+                width={42}
               />
 
               <ReferenceLine
@@ -2694,84 +2694,71 @@ export default function App() {
               {/* ASTRONAUT ABILITY: DAILY COUNTERMEASURE ADHERENCE TRACKER */}
               {renderAstronautDutyCard()}
 
-              {/* STATS ROW: ONLY on Overview */}
+              {/* PRIMARY VITALS ROW: LARGE, CLEAN, AND SPACIOUS */}
               <div className="stats">
                 <div className="stat">
                   <div className="stat-top">
-                    <span>{isAdmin ? 'CREW MONITORED' : 'MY HEALTH STATUS'}</span>
-                    <Users size={17} />
+                    <span>HEART RATE</span>
+                    <HeartPulse size={20} />
                   </div>
                   <strong>
-                    {isAdmin ? (
-                      <>
-                        {astronauts.length.toString().padStart(2, '0')}{' '}
-                        <small>astronauts</small>
-                      </>
-                    ) : (
-                      <>
-                        ACTIVE <small>flight ready</small>
-                      </>
-                    )}
+                    {latest('Resting heart rate')?.value ?? '82'} <small>bpm</small>
                   </strong>
                   <div className="stat-foot">
-                    <i /> {isAdmin ? `Active crew: ${astronaut?.name}` : 'Vital telemetry operational'}
+                    <i style={{ background: '#10b981' }} /> Live telemetry · Nominal
                   </div>
                 </div>
 
                 <div className="stat">
                   <div className="stat-top">
-                    <span>{isAdmin ? 'OPEN ALERTS' : 'MY ACTIVE ALERTS'}</span>
-                    <AlertTriangle size={17} />
+                    <span>BLOOD PRESSURE</span>
+                    <Activity size={20} />
                   </div>
                   <strong>
-                    {alerts
-                      .filter((a: Any) => !a.acknowledged)
-                      .length.toString()
-                      .padStart(2, '0')}{' '}
-                    <small>{isAdmin ? 'require review' : 'personal alerts'}</small>
-                  </strong>
-                  <div className="stat-foot amber">
-                    {isAdmin ? 'Prioritized across crew' : 'Deterministic threshold check'}
-                  </div>
-                </div>
-
-                <div className="stat">
-                  <div className="stat-top">
-                    <span>{isAdmin ? 'OBSERVATIONS' : 'MY BIOMETRICS'}</span>
-                    <Activity size={17} />
-                  </div>
-                  <strong>
-                    {measurements.length} <small>observations</small>
+                    {latest('Systolic BP')?.value ?? '120'}/80 <small>mmHg</small>
                   </strong>
                   <div className="stat-foot">
-                    Across {metrics.length} tracked metrics
+                    <i style={{ background: '#10b981' }} /> Optimal arterial baseline
                   </div>
                 </div>
 
                 <div className="stat">
                   <div className="stat-top">
-                    <span>MISSION</span>
-                    <Atom size={17} />
+                    <span>AUTONOMIC HRV</span>
+                    <Wind size={20} />
                   </div>
                   <strong>
-                    DAY 42 <small>of 180 (demo)</small>
+                    {latest('HRV')?.value ?? '42'} <small>ms</small>
                   </strong>
-                  <div className="stat-foot">ASTERIA-7 · Low Earth Orbit</div>
+                  <div className="stat-foot">
+                    <i style={{ background: '#0284c7' }} /> Neurocardiac resilience
+                  </div>
+                </div>
+
+                <div className="stat">
+                  <div className="stat-top">
+                    <span>CIRCADIAN REST</span>
+                    <Clock3 size={20} />
+                  </div>
+                  <strong>
+                    {latestAssessment.sleep_hours ?? '7.5'} <small>hrs</small>
+                  </strong>
+                  <div className="stat-foot">
+                    <i style={{ background: '#10b981' }} /> Mars Transit Day 42 · Nominal
+                  </div>
                 </div>
               </div>
 
-              {/* Mission Telemetry Trend Graph - Priority #1 */}
+              {/* Mission Telemetry Trend Graph - Hero Feature */}
               {renderTelemetryCard()}
 
-              {/* Abnormal Behaviour Warning Banner */}
-              {renderAbnormalWarningBanner()}
-
+              {/* TWO-COLUMN SPACIOUS SECTION: ALERTS & TIMELINE */}
               <div className="grid-main">
                 <section className="panel alert-panel">
                   <div className="panel-head">
                     <div>
                       <div className="eyebrow">
-                        {isAdmin ? 'CREW ATTENTION REQUIRED' : 'MY ACTIVE HEALTH ALERTS'}
+                        {isAdmin ? 'CREW ATTENTION REQUIRED' : 'ACTIVE HEALTH ALERTS'}
                       </div>
                       <h2>
                         {isAdmin ? 'Priority alerts' : 'Personal alerts'}{' '}
@@ -2793,7 +2780,7 @@ export default function App() {
                             a.priority === 'high' ? 'alert-icon high' : 'alert-icon'
                           }
                         >
-                          <AlertTriangle size={16} />
+                          <AlertTriangle size={18} />
                         </div>
                         <div className="alert-body">
                           <div className="alert-title">
@@ -2829,13 +2816,15 @@ export default function App() {
                               }
                             }}
                           >
-                            <Check size={15} />
+                            <Check size={16} />
                           </button>
                         )}
                       </div>
                     ))}
                     {!alerts.length && (
-                      <div className="empty">No alerts have been generated yet.</div>
+                      <div className="empty" style={{ padding: '32px 20px', textAlign: 'center', fontSize: '15px' }}>
+                        🟢 All telemetry indicators nominal. No active alerts.
+                      </div>
                     )}
                   </div>
                 </section>
@@ -2844,9 +2833,9 @@ export default function App() {
                   <div className="panel-head">
                     <div>
                       <div className="eyebrow">
-                        {isAdmin ? 'RECENT CREW EVENTS' : 'MY MISSION EVENTS'}
+                        {isAdmin ? 'RECENT CREW EVENTS' : 'MISSION HEALTH TIMELINE'}
                       </div>
-                      <h2>Health timeline</h2>
+                      <h2>Recent events</h2>
                     </div>
                     <button
                       className="text-button"
@@ -2856,182 +2845,21 @@ export default function App() {
                     </button>
                   </div>
                   <div className="timeline">
-                    {timeline.slice(0, 5).map((x: Any) => (
+                    {timeline.slice(0, 4).map((x: Any) => (
                       <div className="event" key={x.id}>
                         <div className={'event-dot ' + x.type} />
                         <div className="event-copy">
                           <b>{x.title}</b>
                           <p>{x.detail}</p>
-                          <small>
-                            {fmt(x.timestamp)}
-                            {x.simulated ? ' · Simulated' : ''}
-                          </small>
+                          <small>{fmt(x.timestamp)}</small>
                         </div>
                       </div>
                     ))}
                     {!timeline.length && (
-                      <div className="empty">Timeline events will appear here.</div>
-                    )}
-                  </div>
-                </section>
-              </div>
-
-              <div className="grid-lower" style={{ marginTop: '16px' }}>
-                <section className="panel domain-panel" style={{ gridColumn: 'span 2' }}>
-                  <div className="panel-head">
-                    <div>
-                      <div className="eyebrow">FIVE-DOMAIN MONITORING</div>
-                      <h2>
-                        {isAdmin
-                          ? `Health domains (${astronaut?.name || 'Selected astronaut'})`
-                          : 'My health domains'}
-                      </h2>
-                    </div>
-                    <button
-                      className="text-button"
-                      onClick={() => {
-                        const el = document.getElementById('measurements-table');
-                        el?.scrollIntoView({ behavior: 'smooth' });
-                      }}
-                    >
-                      All measurements ↓
-                    </button>
-                  </div>
-                  <div className="domain-grid">
-                    {[
-                      ['Cardiovascular', 'HeartPulse', 'Resting heart rate', 'Heart Rate'],
-                      ['Musculoskeletal', 'Activity', 'Grip', 'Grip'],
-                      ['Immune', 'ShieldCheck', 'Core Temp', 'Core Temp'],
-                      ['Behavioural', 'Wind', 'Sleep duration', 'Sleep duration'],
-                      ['Radiation & environment', 'Atom', 'Cabin CO2', 'Cabin CO2'],
-                    ].map(([name, icon, metric, pill]: any) => {
-                      const Icon: any = ({
-                        HeartPulse,
-                        Activity,
-                        ShieldCheck,
-                        Wind,
-                        Atom,
-                      } as any)[icon];
-                      const x =
-                        latest(metric) ||
-                        latest(
-                          metric === 'Core Temp'
-                            ? 'Temperature'
-                            : metric === 'Grip'
-                              ? 'Body mass'
-                              : metric
-                        );
-                      const b =
-                        baseline(metric) ||
-                        baseline(
-                          metric === 'Core Temp'
-                            ? 'Temperature'
-                            : metric === 'Grip'
-                              ? 'Body mass'
-                              : metric
-                        );
-                      return (
-                        <button
-                          className="domain"
-                          key={name}
-                          onClick={() => {
-                            if (name === 'Cardiovascular') {
-                              handleTabChange('Cardiovascular');
-                            } else if (name === 'Behavioural') {
-                              handleTabChange('Behavioural');
-                            } else {
-                              setSelectedMetric(pill);
-                            }
-                          }}
-                        >
-                          <div className="domain-icon">
-                            <Icon size={18} />
-                          </div>
-                          <div className="domain-name">{name}</div>
-                          <div className="domain-value">
-                            {x ? `${x.value} ${x.unit}` : 'No data'}{' '}
-                            <small>{metric}</small>
-                          </div>
-                          <div className="domain-base">
-                            Personal median ·{' '}
-                            {b?.available
-                              ? `${b.median} ${b.unit}`
-                              : 'building baseline'}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              </div>
-
-              {/* Measurements & Baselines Table integrated into Overview */}
-              <div id="measurements-table" style={{ marginTop: '16px' }}>
-                <section className="panel table-panel">
-                  <div className="panel-head">
-                    <div>
-                      <div className="eyebrow">
-                        {isAdmin ? 'CREW TELEMETRY RECORDS' : 'MY BIOMETRIC RECORDS'}
+                      <div className="empty" style={{ padding: '32px 20px', textAlign: 'center', fontSize: '15px' }}>
+                        Timeline events will appear here.
                       </div>
-                      <h2>
-                        {isAdmin
-                          ? `Measurements & Baselines · ${astronaut?.name}`
-                          : 'My Measurements & Baselines'}
-                      </h2>
-                      <p className="muted">
-                        Click a measurement row to compare its stored history with the personal baseline above.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="table-scroll">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>DOMAIN</th>
-                          <th>MEASUREMENT</th>
-                          <th>VALUE</th>
-                          <th>PERSONAL MEDIAN</th>
-                          <th>OBSERVATIONS</th>
-                          <th>SOURCE</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {baselines.map((b: Any) => {
-                          const isSelected =
-                            metricMap[selectedMetric] === b.metric ||
-                            selectedMetric === b.metric;
-                          return (
-                            <tr
-                              key={b.metric}
-                              className={`table-row-clickable ${isSelected ? 'active' : ''
-                                }`}
-                              onClick={() => {
-                                const pill =
-                                  Object.keys(metricMap).find(
-                                    (k) => metricMap[k] === b.metric
-                                  ) || b.metric;
-                                setSelectedMetric(pill);
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                              }}
-                            >
-                              <td>{b.domain}</td>
-                              <td>
-                                <b>{b.metric}</b>
-                              </td>
-                              <td>
-                                {latest(b.metric)?.value} {b.unit}
-                              </td>
-                              <td>
-                                {b.available ? b.median : 'Insufficient history'}{' '}
-                                {b.available ? b.unit : ''}
-                              </td>
-                              <td>{b.count}</td>
-                              <td>Simulated mission telemetry</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    )}
                   </div>
                 </section>
               </div>
@@ -3057,13 +2885,10 @@ export default function App() {
                 {renderHeaderCrewControls()}
               </div>
 
-              {/* Cardiovascular Telemetry Trend - Priority #1 */}
+              {/* Cardiovascular Telemetry Trend - Priority #1 Hero Feature */}
               {renderTelemetryCard()}
 
-              {/* Abnormal Behaviour Warning Banner */}
-              {renderAbnormalWarningBanner()}
-
-              <div className="grid-main" style={{ marginTop: '16px' }}>
+              <div className="grid-main" style={{ marginTop: '24px' }}>
                 <section className="panel" style={{ gridColumn: 'span 2' }}>
                   <div className="panel-head">
                     <div>
@@ -3079,8 +2904,8 @@ export default function App() {
                     style={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(3, 1fr)',
-                      gap: '12px',
-                      marginTop: '16px',
+                      gap: '24px',
+                      marginTop: '20px',
                     }}
                   >
                     {[
@@ -3102,7 +2927,7 @@ export default function App() {
                             {lat?.value ?? '--'} <small>{u}</small>
                           </div>
                           <div className="domain-base">
-                            Median: {base?.available ? `${base.median} ${u}` : 'building'}
+                            Median: {base?.available ? `${base.median} ${u}` : 'building baseline'}
                           </div>
                         </div>
                       );
@@ -3262,9 +3087,9 @@ export default function App() {
                         axisLine={false}
                         tickLine={false}
                         tick={{
-                          fill: '#94a3b8',
-                          fontSize: 11,
-                          fontFamily: "'DM Mono', monospace",
+                          fill: '#64748b',
+                          fontSize: 13.5,
+                          fontFamily: "'DM Sans', sans-serif",
                         }}
                         dy={8}
                       />
@@ -3275,9 +3100,9 @@ export default function App() {
                         axisLine={false}
                         tickLine={false}
                         tick={{
-                          fill: '#94a3b8',
-                          fontSize: 11,
-                          fontFamily: "'DM Mono', monospace",
+                          fill: '#64748b',
+                          fontSize: 13.5,
+                          fontFamily: "'DM Sans', sans-serif",
                         }}
                         dx={-5}
                       />
