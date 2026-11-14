@@ -187,13 +187,6 @@ export default function App() {
   const [packetCount, setPacketCount] = useState(0);
   const [isPulseActive, setIsPulseActive] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
-  const [realtimeClock, setRealtimeClock] = useState(() => {
-    const d = new Date();
-    return {
-      utc: d.toISOString().slice(11, 19) + ' UTC',
-      met: `042:${d.toISOString().slice(11, 19)}`,
-    };
-  });
 
   // API responses are authoritative. Optional Firebase sync is backend-only.
   const firebaseActive = false;
@@ -810,18 +803,6 @@ export default function App() {
       setSelectedMetric(availablePills[0]);
     }
   }, [availablePills, selectedMetric]);
-
-  // Real-time UTC and Mission Elapsed Time clock (1-second tick)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const d = new Date();
-      setRealtimeClock({
-        utc: d.toISOString().slice(11, 19) + ' UTC',
-        met: `042:${d.toISOString().slice(11, 19)}`,
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Real-time Telemetry Downlink Stream (every 4 seconds)
   useEffect(() => {
@@ -2439,7 +2420,7 @@ export default function App() {
 
   return (
     <div className="shell">
-      {/* UNIFIED FULL-WIDTH SOLID TOPBAR */}
+      {/* UNIFIED FULL-WIDTH SOLID TOPBAR - MINIMAL & DECLUTTERED */}
       <header className="topbar">
         <div className="topbar-left">
           <div
@@ -2451,13 +2432,9 @@ export default function App() {
           >
             <img className="brand-logo-fixed" src="/orbitcare-logo-transparent.png" alt="ORBITCARE" />
           </div>
-          <div className="topbar-mission-tag">
-            <span className="mission-tag-code">ASTERIA-7</span>
-            <span className="mission-tag-portal">{isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'}</span>
-          </div>
         </div>
 
-        {/* PRIMARY HORIZONTAL NAVIGATION TABS INTEGRATED IN NAVBAR */}
+        {/* PRIMARY HORIZONTAL NAVIGATION TABS */}
         <nav className="topbar-nav">
           {[
             [LayoutDashboard, 'Overview'],
@@ -2483,30 +2460,14 @@ export default function App() {
         </nav>
 
         <div className="topbar-right">
-          {/* Real-time UTC & Mission Clock */}
-          <div className="topbar-clock" title="Mission Elapsed Time & UTC Clock">
-            <Clock3 size={13} className="topbar-clock-icon" />
-            <span className="topbar-clock-utc">{realtimeClock.utc}</span>
-            <span className="topbar-clock-met">MET {realtimeClock.met}</span>
-          </div>
-
-          {/* Role Badge */}
-          {isAdmin ? (
-            <span className="role-pill admin">
-              <ShieldCheck size={13} /> Admin
-            </span>
-          ) : (
-            <span className="role-pill user">
-              <UserCheck size={13} /> Crew
-            </span>
-          )}
-
           <button
-            className="theme-toggle"
+            type="button"
+            className="topbar-theme-btn"
             onClick={toggleTheme}
             title={`Switch to ${isLight ? 'Dark' : 'Light'} Mode`}
+            aria-label="Toggle color theme"
           >
-            {isLight ? <Moon size={15} /> : <Sun size={15} />}
+            {isLight ? <Moon size={17} /> : <Sun size={17} />}
           </button>
 
           <div className="topbar-user-wrap">
@@ -2514,6 +2475,7 @@ export default function App() {
               {isAdmin ? 'MO' : (astronaut?.call_sign?.slice(0, 2) || 'AS')}
             </div>
             <button
+              type="button"
               className="topbar-logout-btn"
               title="Sign out"
               onClick={() => {
@@ -2521,6 +2483,7 @@ export default function App() {
                 setToken('');
                 setUser(null);
               }}
+              aria-label="Sign out"
             >
               <LogOut size={16} />
             </button>
