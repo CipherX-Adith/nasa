@@ -1232,21 +1232,21 @@ export default function App() {
     if (payload.is_current) {
       return (
         <g>
-          <circle cx={cx} cy={cy} r={8} fill="none" stroke="#0284c7" strokeWidth={2} opacity={0.6}>
-            <animate attributeName="r" values="6;12;6" dur="2s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite" />
+          <circle cx={cx} cy={cy} r={10} fill="none" stroke="#00d2ff" strokeWidth={2.5} opacity={0.8}>
+            <animate attributeName="r" values="8;18;8" dur="1.8s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.9;0.1;0.9" dur="1.8s" repeatCount="indefinite" />
           </circle>
-          <circle cx={cx} cy={cy} r={4.5} fill="#0284c7" stroke="#ffffff" strokeWidth={2} />
+          <circle cx={cx} cy={cy} r={5} fill="#0077ff" stroke="#ffffff" strokeWidth={2.5} />
         </g>
       );
     }
     if (payload.isDrift) {
       return (
-        <circle cx={cx} cy={cy} r={4} fill="#ef4444" stroke="#1e222d" strokeWidth={1.2} />
+        <circle cx={cx} cy={cy} r={4.5} fill="#ff0055" stroke="#ffffff" strokeWidth={1.5} />
       );
     }
     return (
-      <circle cx={cx} cy={cy} r={2.5} fill="#38bdf8" />
+      <circle cx={cx} cy={cy} r={3} fill="#0088ff" stroke="#ffffff" strokeWidth={1} />
     );
   };
 
@@ -1255,14 +1255,17 @@ export default function App() {
     const { cx, cy } = props;
     if (cx === undefined || cy === undefined) return null;
     return (
-      <circle
-        cx={cx}
-        cy={cy}
-        r={4.5}
-        fill="#38bdf8"
-        stroke="#ffffff"
-        strokeWidth={2}
-      />
+      <g>
+        <circle cx={cx} cy={cy} r={10} fill="rgba(0, 140, 255, 0.3)" />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={5}
+          fill="#0077ff"
+          stroke="#ffffff"
+          strokeWidth={2.5}
+        />
+      </g>
     );
   };
 
@@ -1285,7 +1288,7 @@ export default function App() {
             {data.baselineUpper})
           </div>
           {data.is_current && (
-            <div style={{ marginTop: '4px', fontSize: '10.5px', color: '#0284c7', fontWeight: 700 }}>
+            <div style={{ marginTop: '4px', fontSize: '13px', color: '#00d2ff', fontWeight: 700 }}>
               ● Active LEO Downlink Signal
             </div>
           )}
@@ -1881,17 +1884,17 @@ export default function App() {
                 >
                   <stop
                     offset="0%"
-                    stopColor="#38bdf8"
-                    stopOpacity={0.22}
+                    stopColor="#00d2ff"
+                    stopOpacity={0.42}
                   />
                   <stop
-                    offset="85%"
-                    stopColor="#e0f2fe"
-                    stopOpacity={0.04}
+                    offset="45%"
+                    stopColor="#6366f1"
+                    stopOpacity={0.16}
                   />
                   <stop
                     offset="100%"
-                    stopColor="#ffffff"
+                    stopColor="#0066ff"
                     stopOpacity={0}
                   />
                 </linearGradient>
@@ -1905,8 +1908,9 @@ export default function App() {
                 axisLine={false}
                 tickLine={false}
                 tick={{
-                  fill: '#64748b',
-                  fontSize: 13.5,
+                  fill: '#334155',
+                  fontSize: 14,
+                  fontWeight: 600,
                   fontFamily: "'DM Sans', sans-serif",
                 }}
                 dy={8}
@@ -1918,36 +1922,38 @@ export default function App() {
                 axisLine={false}
                 tickLine={false}
                 tick={{
-                  fill: '#64748b',
-                  fontSize: 13.5,
+                  fill: '#334155',
+                  fontSize: 14,
+                  fontWeight: 600,
                   fontFamily: "'DM Sans', sans-serif",
                 }}
-                width={42}
+                width={44}
               />
 
               <ReferenceLine
                 y={telemetryData.median}
-                stroke="#7dd3fc"
+                stroke="#0088ff"
                 strokeDasharray="4 4"
-                strokeWidth={1.5}
+                strokeWidth={2}
               />
               <ReferenceLine
                 y={telemetryData.upper}
-                stroke="#bae6fd"
+                stroke="#60a5fa"
                 strokeDasharray="3 3"
-                strokeWidth={1}
+                strokeWidth={1.5}
               />
               <ReferenceLine
                 y={telemetryData.lower}
-                stroke="#bae6fd"
+                stroke="#60a5fa"
                 strokeDasharray="3 3"
-                strokeWidth={1}
+                strokeWidth={1.5}
               />
 
               <Tooltip
                 cursor={{
-                  stroke: '#cbd5e1',
-                  strokeWidth: 1,
+                  stroke: '#0088ff',
+                  strokeWidth: 1.5,
+                  strokeDasharray: '4 4',
                 }}
                 content={<CustomTooltip />}
               />
@@ -1955,8 +1961,8 @@ export default function App() {
               <Area
                 type="monotone"
                 dataKey="value"
-                stroke="#38bdf8"
-                strokeWidth={2}
+                stroke="#0077ff"
+                strokeWidth={3.5}
                 fill="url(#telemetryFill)"
                 dot={isHourly ? <CustomHourlyDot /> : <CustomDot />}
                 activeDot={<CustomActiveDot />}
@@ -2672,79 +2678,73 @@ export default function App() {
               <div className="heading-row">
                 <div>
                   <div className="eyebrow">
-                    MARS TRANSIT · DAY 042 <span className="sep">·</span> SIMULATED SCENARIO <span className="sep">·</span>{' '}
-                    {isAdmin ? 'FLIGHT SURGEON OVERVIEW' : 'ASTRONAUT TELEMETRY'}
+                    MARS TRANSIT · DAY 042 <span className="sep">·</span>{' '}
+                    {isAdmin ? 'FLIGHT SURGEON COMMAND' : 'ASTRONAUT TELEMETRY'}
                   </div>
                   <h1>
                     {isAdmin ? 'Crew Health Overview' : 'Personal Health Overview'}
                   </h1>
                   <p className="muted">
                     {isAdmin
-                      ? `Prototype monitoring summary, data coverage, and personal-baseline comparisons across the Mars Transit crew.`
-                      : `Personal health signals, baseline comparisons, and telemetry for ${astronaut?.name}.`}
+                      ? `Real-time bio-telemetry, cardiac parameters, and longitudinal adaptation for Mars Transit crew.`
+                      : `Personal real-time bio-telemetry, baseline drift, and vital signals for ${astronaut?.name}.`}
                   </p>
                 </div>
 
                 {renderHeaderCrewControls()}
               </div>
 
-              {/* ADMIN ABILITY: FLEET OPERATIONAL READINESS & CREW TRIAGE */}
-              {renderFleetTriage()}
-
-              {/* ASTRONAUT ABILITY: DAILY COUNTERMEASURE ADHERENCE TRACKER */}
-              {renderAstronautDutyCard()}
-
               {/* PRIMARY VITALS ROW: LARGE, CLEAN, AND SPACIOUS */}
               <div className="stats">
                 <div className="stat">
                   <div className="stat-top">
                     <span>HEART RATE</span>
-                    <HeartPulse size={20} />
+                    <HeartPulse size={22} style={{ color: '#ff0055' }} />
                   </div>
                   <strong>
                     {latest('Resting heart rate')?.value ?? '82'} <small>bpm</small>
                   </strong>
                   <div className="stat-foot">
-                    <i style={{ background: '#10b981' }} /> Live telemetry · Nominal
+                    <i style={{ background: '#ff0055', boxShadow: '0 0 10px #ff0055' }} /> Live telemetry · Nominal
                   </div>
                 </div>
 
                 <div className="stat">
                   <div className="stat-top">
                     <span>BLOOD PRESSURE</span>
-                    <Activity size={20} />
+                    <Activity size={22} style={{ color: '#0077ff' }} />
                   </div>
                   <strong>
                     {latest('Systolic BP')?.value ?? '120'}/80 <small>mmHg</small>
                   </strong>
                   <div className="stat-foot">
-                    <i style={{ background: '#10b981' }} /> Optimal arterial baseline
+                    <i style={{ background: '#0077ff', boxShadow: '0 0 10px #0077ff' }} /> Optimal arterial baseline
                   </div>
                 </div>
 
                 <div className="stat">
                   <div className="stat-top">
                     <span>AUTONOMIC HRV</span>
-                    <Wind size={20} />
+                    <Wind size={22} style={{ color: '#7c3aed' }} />
                   </div>
                   <strong>
                     {latest('HRV')?.value ?? '42'} <small>ms</small>
                   </strong>
                   <div className="stat-foot">
-                    <i style={{ background: '#0284c7' }} /> Neurocardiac resilience
+                    <i style={{ background: '#7c3aed', boxShadow: '0 0 10px #7c3aed' }} /> Neurocardiac resilience
                   </div>
                 </div>
 
                 <div className="stat">
                   <div className="stat-top">
                     <span>CIRCADIAN REST</span>
-                    <Clock3 size={20} />
+                    <Clock3 size={22} style={{ color: '#10b981' }} />
                   </div>
                   <strong>
                     {latestAssessment.sleep_hours ?? '7.5'} <small>hrs</small>
                   </strong>
                   <div className="stat-foot">
-                    <i style={{ background: '#10b981' }} /> Mars Transit Day 42 · Nominal
+                    <i style={{ background: '#10b981', boxShadow: '0 0 10px #10b981' }} /> Day 42 Rest · Nominal
                   </div>
                 </div>
               </div>
@@ -2752,116 +2752,40 @@ export default function App() {
               {/* Mission Telemetry Trend Graph - Hero Feature */}
               {renderTelemetryCard()}
 
-              {/* TWO-COLUMN SPACIOUS SECTION: ALERTS & TIMELINE */}
-              <div className="grid-main">
-                <section className="panel alert-panel">
-                  <div className="panel-head">
-                    <div>
-                      <div className="eyebrow">
-                        {isAdmin ? 'CREW ATTENTION REQUIRED' : 'ACTIVE HEALTH ALERTS'}
-                      </div>
-                      <h2>
-                        {isAdmin ? 'Priority alerts' : 'Personal alerts'}{' '}
-                        <span className="count">{alerts.length}</span>
-                      </h2>
-                    </div>
-                    <button
-                      className="text-button"
-                      onClick={() => handleTabChange('Mission timeline')}
-                    >
-                      View timeline →
-                    </button>
-                  </div>
-                  <div className="alert-list">
-                    {alerts.slice(0, 4).map((a: Any) => (
-                      <div className="alert-item" key={a.id}>
-                        <div
-                          className={
-                            a.priority === 'high' ? 'alert-icon high' : 'alert-icon'
-                          }
-                        >
-                          <AlertTriangle size={18} />
-                        </div>
-                        <div className="alert-body">
-                          <div className="alert-title">
-                            {a.metric}{' '}
-                            <span
-                              className={
-                                a.priority === 'high'
-                                  ? 'priority high-text'
-                                  : 'priority'
-                              }
-                            >
-                              {a.priority}
-                            </span>
-                          </div>
-                          <p>{a.reason}</p>
-                          <small>
-                            {fmt(a.created_at)} ·{' '}
-                            {a.acknowledged ? 'Acknowledged' : 'Open'}
-                          </small>
-                        </div>
-                        {isAdmin && !a.acknowledged && (
-                          <button
-                            className="ack"
-                            title="Acknowledge and add follow-up"
-                            onClick={async () => {
-                              const note = prompt('Follow-up action to record:');
-                              if (note) {
-                                await api(`/alerts/${a.id}/acknowledge`, {
-                                  method: 'POST',
-                                  body: JSON.stringify({ note }),
-                                });
-                                load();
-                              }
-                            }}
-                          >
-                            <Check size={16} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {!alerts.length && (
-                      <div className="empty" style={{ padding: '32px 20px', textAlign: 'center', fontSize: '15px' }}>
-                        🟢 All telemetry indicators nominal. No active alerts.
-                      </div>
-                    )}
-                  </div>
-                </section>
-
-                <section className="panel timeline-panel">
-                  <div className="panel-head">
-                    <div>
-                      <div className="eyebrow">
-                        {isAdmin ? 'RECENT CREW EVENTS' : 'MISSION HEALTH TIMELINE'}
-                      </div>
-                      <h2>Recent events</h2>
-                    </div>
-                    <button
-                      className="text-button"
-                      onClick={() => handleTabChange('Mission timeline')}
-                    >
-                      Open timeline →
-                    </button>
-                  </div>
-                  <div className="timeline">
-                    {timeline.slice(0, 4).map((x: Any) => (
-                      <div className="event" key={x.id}>
-                        <div className={'event-dot ' + x.type} />
-                        <div className="event-copy">
-                          <b>{x.title}</b>
-                          <p>{x.detail}</p>
-                          <small>{fmt(x.timestamp)}</small>
-                        </div>
-                      </div>
-                    ))}
-                    {!timeline.length && (
-                      <div className="empty" style={{ padding: '32px 20px', textAlign: 'center', fontSize: '15px' }}>
-                        Timeline events will appear here.
-                      </div>
-                    )}
-                  </div>
-                </section>
+              {/* SLEEK CURVED QUICK JUMP DOCK */}
+              <div className="overview-quick-dock">
+                <div className="quick-dock-info">
+                  <span className="dock-beacon-dot" />
+                  <span>
+                    Continuous Bio-Telemetry Downlink Active · Mission Day 042 · All physiological channels nominal
+                  </span>
+                </div>
+                <div className="quick-dock-actions">
+                  <button
+                    type="button"
+                    className="dock-action-btn"
+                    onClick={() => handleTabChange('Mission timeline')}
+                  >
+                    <Clock3 size={16} />
+                    <span>Mission Timeline ({timeline.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="dock-action-btn"
+                    onClick={() => handleTabChange('Medical records')}
+                  >
+                    <FileText size={16} />
+                    <span>Medical Records ({docs.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="dock-action-btn highlight"
+                    onClick={() => handleTabChange('AI assistant')}
+                  >
+                    <MessageCircle size={16} />
+                    <span>Ask AI Assistant</span>
+                  </button>
+                </div>
               </div>
             </>
           )}
