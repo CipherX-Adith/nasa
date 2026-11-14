@@ -1225,19 +1225,13 @@ export default function App() {
     };
   }, [hourlyTelemetry, telemetryData, selected, astronaut]);
 
-  // Custom Hourly Dot: pulses radar ring on the current live hour, red on drift
+  // Custom Hourly Dot: solid marker
   const CustomHourlyDot = (props: any) => {
     const { cx, cy, payload } = props;
     if (!payload || cx === undefined || cy === undefined) return null;
     if (payload.is_current) {
       return (
-        <g>
-          <circle cx={cx} cy={cy} r={10} fill="none" stroke="#00d2ff" strokeWidth={2.5} opacity={0.8}>
-            <animate attributeName="r" values="8;18;8" dur="1.8s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.9;0.1;0.9" dur="1.8s" repeatCount="indefinite" />
-          </circle>
-          <circle cx={cx} cy={cy} r={5} fill="#0077ff" stroke="#ffffff" strokeWidth={2.5} />
-        </g>
+        <circle cx={cx} cy={cy} r={5} fill="#0066ff" stroke="#ffffff" strokeWidth={2.5} />
       );
     }
     if (payload.isDrift) {
@@ -1246,7 +1240,7 @@ export default function App() {
       );
     }
     return (
-      <circle cx={cx} cy={cy} r={3} fill="#0088ff" stroke="#ffffff" strokeWidth={1} />
+      <circle cx={cx} cy={cy} r={3} fill="#0066ff" stroke="#ffffff" strokeWidth={1} />
     );
   };
 
@@ -1255,17 +1249,14 @@ export default function App() {
     const { cx, cy } = props;
     if (cx === undefined || cy === undefined) return null;
     return (
-      <g>
-        <circle cx={cx} cy={cy} r={10} fill="rgba(0, 140, 255, 0.3)" />
-        <circle
-          cx={cx}
-          cy={cy}
-          r={5}
-          fill="#0077ff"
-          stroke="#ffffff"
-          strokeWidth={2.5}
-        />
-      </g>
+      <circle
+        cx={cx}
+        cy={cy}
+        r={5}
+        fill="#0066ff"
+        stroke="#ffffff"
+        strokeWidth={2}
+      />
     );
   };
 
@@ -1274,7 +1265,7 @@ export default function App() {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const title = telemetryMode === 'hourly'
-        ? `${data.hour || label} · Day 42 illustrative profile${data.is_current ? ' · latest stored reading' : ''}`
+        ? `${data.hour || label} · Day 42 profile`
         : (data.dayFull || label);
 
       return (
@@ -1287,11 +1278,6 @@ export default function App() {
             Baseline: {data.baselineMedian} {data.unit} ({data.baselineLower}-
             {data.baselineUpper})
           </div>
-          {data.is_current && (
-            <div style={{ marginTop: '4px', fontSize: '13px', color: '#00d2ff', fontWeight: 700 }}>
-              ● Active LEO Downlink Signal
-            </div>
-          )}
         </div>
       );
     }
@@ -1838,36 +1824,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* REAL-TIME TELEMETRY DOWNLINK STRIP */}
-        <div className="telemetry-live-strip">
-          <div className="live-strip-left">
-            <span className={`live-pulse-indicator ${isPulseActive ? 'beat' : ''}`}>
-              <HeartPulse size={15} />
-            </span>
-            <span className="live-strip-metric">
-              Live {selectedMetric}: <b>{latest(backendMetric)?.value ?? activePoints.at(-1)?.value ?? '--'}</b> {telemetryData.unit}
-            </span>
-            <span className="live-strip-tag">
-              LEO Downlink · 0.25 Hz
-            </span>
-          </div>
-          <div className="live-strip-right">
-            <span className="live-strip-packets">
-              Stored readings: <b>{packetCount}</b>
-            </span>
-            <span className="live-strip-time">
-              Last check: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            </span>
-            <button
-              type="button"
-              className="live-strip-toggle-btn"
-              onClick={() => setLiveStreaming(!liveStreaming)}
-            >
-              {liveStreaming ? 'Pause Stream' : 'Resume Stream'}
-            </button>
-          </div>
-        </div>
-
         <div className="telemetry-chart-container">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
@@ -1884,18 +1840,13 @@ export default function App() {
                 >
                   <stop
                     offset="0%"
-                    stopColor="#00d2ff"
-                    stopOpacity={0.42}
-                  />
-                  <stop
-                    offset="45%"
-                    stopColor="#6366f1"
+                    stopColor="#0066ff"
                     stopOpacity={0.16}
                   />
                   <stop
                     offset="100%"
                     stopColor="#0066ff"
-                    stopOpacity={0}
+                    stopOpacity={0.01}
                   />
                 </linearGradient>
               </defs>
@@ -2195,38 +2146,16 @@ export default function App() {
           </div>
         </div>
 
-        {/* Flight Surgeon Authority: Direct Flight Clearance Assignment (Admin only) */}
-        {isAdmin && (
-          <div className="clearance-control-row" title="Flight Surgeon medical clearance sign-off">
-            <span className="clearance-control-label">Clearance:</span>
-            <select
-              className="clearance-select"
-              value={activeCrew.flight_clearance || 'FLIGHT READY'}
-              disabled={clearanceUpdating}
-              onChange={(e) => handleUpdateClearance(activeCrew.id || selected || 1, e.target.value)}
-            >
-              <option value="FLIGHT READY">🟢 FLIGHT READY (Nominal)</option>
-              <option value="RESTRICTED WORKLOAD">🟡 RESTRICTED WORKLOAD (Light EVA)</option>
-              <option value="MEDICAL HOLD">🔴 MEDICAL HOLD (Grounded / Rest)</option>
-            </select>
-          </div>
-        )}
-
-        {/* Astronaut Actions: Clearance Status & Consult Flight Surgeon */}
+        {/* Astronaut Actions: Consult Flight Surgeon */}
         {!isAdmin && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-            <span className={`clearance-pill ${(activeCrew.flight_clearance || 'FLIGHT READY') === 'FLIGHT READY' ? 'ready' : (activeCrew.flight_clearance || '') === 'RESTRICTED WORKLOAD' ? 'restricted' : 'hold'}`}>
-              ● CLEARANCE: {activeCrew.flight_clearance || 'FLIGHT READY'}
-            </span>
-            <button
-              type="button"
-              className="btn-secondary"
-              style={{ padding: '6px 12px', fontSize: '11.5px', display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: '7px' }}
-              onClick={() => setConsultModalOpen(true)}
-            >
-              🩺 Consult Flight Surgeon
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ padding: '10px 18px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: '9999px', fontWeight: 700 }}
+            onClick={() => setConsultModalOpen(true)}
+          >
+            🩺 Consult Flight Surgeon
+          </button>
         )}
 
         {/* DAILY CLINICAL REPORT BUTTON */}
@@ -2510,160 +2439,96 @@ export default function App() {
 
   return (
     <div className="shell">
-      {/* FIXED LOGO & EXPANDABLE POPUP NAVIGATION IN UPPER SECTION */}
-      <div className="fixed-brand-anchor">
-        <div
-          className="brand-logo-container"
-          onClick={() => {
-            handleTabChange('Overview');
-            setNavPopupOpen(false);
-          }}
-          title="Return to Overview"
-          role="button"
-          tabIndex={0}
-        >
-          <img className="brand-logo-fixed" src="/orbitcare-logo-transparent.png" alt="ORBITCARE" />
-        </div>
-        <button
-          type="button"
-          className={`nav-arrow-trigger ${navPopupOpen ? 'open' : ''}`}
-          onClick={() => setNavPopupOpen((prev) => !prev)}
-          aria-expanded={navPopupOpen}
-          aria-label="Toggle navigation menu"
-          title={navPopupOpen ? 'Close Navigation Menu' : 'Open Navigation Menu'}
-        >
-          <span className="arrow-trigger-text">
-            {isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'}
-          </span>
-          <ChevronDown
-            size={14}
-            className={`arrow-chevron-icon ${navPopupOpen ? 'rotated' : ''}`}
-          />
-        </button>
-
-        {/* FLOATING LIQUID-GLASS POPUP DRAWER */}
-        {navPopupOpen && (
-          <>
-            <div
-              className="nav-popup-backdrop"
-              onClick={() => setNavPopupOpen(false)}
-              aria-hidden="true"
-            />
-            <div
-              className="nav-popup-drawer liquid-glass-panel"
-              role="dialog"
-              aria-label="Navigation Menu"
-            >
-              <div className="mission-label">
-                {isAdmin ? 'FLIGHT SURGEON' : 'PERSONAL CONSOLE'}
-              </div>
-              <nav>
-                {[
-                  [LayoutDashboard, 'Overview'],
-                  [HeartPulse, 'Cardiovascular'],
-                  [Wind, 'Behavioural'],
-                  [Clock3, 'Mission timeline'],
-                  [FileText, 'Medical records'],
-                  [MessageCircle, 'AI assistant'],
-                  ...(isAdmin ? [[UserCheck, 'Crew accounts']] : []),
-                ].map(([Icon, label]: any) => (
-                  <button
-                    className={tab === label ? 'nav active' : 'nav'}
-                    onClick={() => {
-                      handleTabChange(label);
-                      setNavPopupOpen(false);
-                    }}
-                    key={label}
-                  >
-                    <Icon size={18} />
-                    <span>{label}</span>
-                    {label === 'Crew accounts' && pendingApplicantsCount > 0 && (
-                      <span className="nav-badge">{pendingApplicantsCount}</span>
-                    )}
-                  </button>
-                ))}
-              </nav>
-              <div className="sidebar-bottom">
-                <div className={`live ${isPulseActive ? 'pulse-tick' : ''}`}>
-                  <i /> {liveStreaming ? 'TELEMETRY DOWNLINK ACTIVE' : 'TELEMETRY STREAM PAUSED'}
-                </div>
-                <div className="profile">
-                  <div className="avatar">{isAdmin ? 'MO' : 'AS'}</div>
-                  <div>
-                    <b>{user?.username}</b>
-                    <small>
-                      {isAdmin ? 'Medical Officer (Admin)' : `${astronaut?.name || 'Astronaut'} (User)`}
-                    </small>
-                  </div>
-                  <button
-                    title="Sign out"
-                    onClick={() => {
-                      localStorage.clear();
-                      setToken('');
-                      setUser(null);
-                      setNavPopupOpen(false);
-                    }}
-                  >
-                    <LogOut size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      <main className="main">
-        <header className="topbar">
-          <div className="crumb">
-            ASTERIA-7 <span>/</span> {isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'} <span>/</span> {tab.toUpperCase()}
+      {/* UNIFIED FULL-WIDTH SOLID TOPBAR */}
+      <header className="topbar">
+        <div className="topbar-left">
+          <div
+            className="brand-logo-container"
+            onClick={() => handleTabChange('Overview')}
+            title="Return to Overview"
+            role="button"
+            tabIndex={0}
+          >
+            <img className="brand-logo-fixed" src="/orbitcare-logo-transparent.png" alt="ORBITCARE" />
           </div>
-          <div className="top-right">
-            {/* Dashboard Mode Indicator */}
-            {isAdmin ? (
-              <span className="role-pill admin">
-                <ShieldCheck size={13} /> Admin
-              </span>
-            ) : (
-              <span className="role-pill user">
-                <UserCheck size={13} /> Astronaut
-              </span>
-            )}
+          <div className="topbar-mission-tag">
+            <span className="mission-tag-code">ASTERIA-7</span>
+            <span className="mission-tag-portal">{isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'}</span>
+          </div>
+        </div>
 
+        {/* PRIMARY HORIZONTAL NAVIGATION TABS INTEGRATED IN NAVBAR */}
+        <nav className="topbar-nav">
+          {[
+            [LayoutDashboard, 'Overview'],
+            [HeartPulse, 'Cardiovascular'],
+            [Wind, 'Behavioural'],
+            [Clock3, 'Mission timeline'],
+            [FileText, 'Medical records'],
+            [MessageCircle, 'AI assistant'],
+            ...(isAdmin ? [[UserCheck, 'Crew accounts']] : []),
+          ].map(([Icon, label]: any) => (
             <button
-              className="theme-toggle"
-              onClick={toggleTheme}
-              title={`Switch to ${isLight ? 'Dark' : 'Light'} Mode`}
+              className={tab === label ? 'topbar-nav-item active' : 'topbar-nav-item'}
+              onClick={() => handleTabChange(label)}
+              key={label}
             >
-              {isLight ? <Moon size={15} /> : <Sun size={15} />}
-              <span>{isLight ? 'Dark mode' : 'Light mode'}</span>
+              <Icon size={16} />
+              <span>{label}</span>
+              {label === 'Crew accounts' && pendingApplicantsCount > 0 && (
+                <span className="nav-badge">{pendingApplicantsCount}</span>
+              )}
             </button>
+          ))}
+        </nav>
 
-            {/* Real-time UTC & Mission Clock */}
-            <div className="topbar-clock" title="Mission Elapsed Time & UTC Clock">
-              <Clock3 size={13} className="topbar-clock-icon" />
-              <span className="topbar-clock-utc">{realtimeClock.utc}</span>
-              <span className="topbar-clock-met">MET {realtimeClock.met}</span>
-            </div>
+        <div className="topbar-right">
+          {/* Real-time UTC & Mission Clock */}
+          <div className="topbar-clock" title="Mission Elapsed Time & UTC Clock">
+            <Clock3 size={13} className="topbar-clock-icon" />
+            <span className="topbar-clock-utc">{realtimeClock.utc}</span>
+            <span className="topbar-clock-met">MET {realtimeClock.met}</span>
+          </div>
 
-            {/* Live Telemetry Downlink Sync Pill & Toggle */}
-            <button
-              type="button"
-              className={`live-sync-pill ${liveStreaming ? 'active' : 'paused'} ${isPulseActive ? 'pulsing' : ''}`}
-              onClick={() => setLiveStreaming(!liveStreaming)}
-              title={`Click to ${liveStreaming ? 'Pause' : 'Resume'} Real-Time Telemetry Stream`}
-            >
-              <span className="radar-beacon-dot" />
-              <span className="live-sync-label">{liveStreaming ? 'LIVE SYNC' : 'PAUSED'}</span>
-              <span className="live-sync-cadence">4s</span>
-            </button>
+          {/* Role Badge */}
+          {isAdmin ? (
+            <span className="role-pill admin">
+              <ShieldCheck size={13} /> Admin
+            </span>
+          ) : (
+            <span className="role-pill user">
+              <UserCheck size={13} /> Crew
+            </span>
+          )}
 
-            <div className="avatar small">
+          <button
+            className="theme-toggle"
+            onClick={toggleTheme}
+            title={`Switch to ${isLight ? 'Dark' : 'Light'} Mode`}
+          >
+            {isLight ? <Moon size={15} /> : <Sun size={15} />}
+          </button>
+
+          <div className="topbar-user-wrap">
+            <div className="avatar small" title={user?.username || 'User'}>
               {isAdmin ? 'MO' : (astronaut?.call_sign?.slice(0, 2) || 'AS')}
             </div>
+            <button
+              className="topbar-logout-btn"
+              title="Sign out"
+              onClick={() => {
+                localStorage.clear();
+                setToken('');
+                setUser(null);
+              }}
+            >
+              <LogOut size={16} />
+            </button>
           </div>
-        </header>
+        </div>
+      </header>
 
+      <main className="main">
         <div className="content">
           {error && (
             <div className="error-banner">
@@ -2705,20 +2570,20 @@ export default function App() {
                     {latest('Resting heart rate')?.value ?? '82'} <small>bpm</small>
                   </strong>
                   <div className="stat-foot">
-                    <i style={{ background: '#ff0055', boxShadow: '0 0 10px #ff0055' }} /> Live telemetry · Nominal
+                    Resting frequency · Nominal baseline
                   </div>
                 </div>
 
                 <div className="stat">
                   <div className="stat-top">
                     <span>BLOOD PRESSURE</span>
-                    <Activity size={22} style={{ color: '#0077ff' }} />
+                    <Activity size={22} style={{ color: '#0066ff' }} />
                   </div>
                   <strong>
                     {latest('Systolic BP')?.value ?? '120'}/80 <small>mmHg</small>
                   </strong>
                   <div className="stat-foot">
-                    <i style={{ background: '#0077ff', boxShadow: '0 0 10px #0077ff' }} /> Optimal arterial baseline
+                    Arterial baseline · 120/80 target
                   </div>
                 </div>
 
@@ -2731,7 +2596,7 @@ export default function App() {
                     {latest('HRV')?.value ?? '42'} <small>ms</small>
                   </strong>
                   <div className="stat-foot">
-                    <i style={{ background: '#7c3aed', boxShadow: '0 0 10px #7c3aed' }} /> Neurocardiac resilience
+                    Parasympathetic vagal resilience
                   </div>
                 </div>
 
@@ -2744,7 +2609,7 @@ export default function App() {
                     {latestAssessment.sleep_hours ?? '7.5'} <small>hrs</small>
                   </strong>
                   <div className="stat-foot">
-                    <i style={{ background: '#10b981', boxShadow: '0 0 10px #10b981' }} /> Day 42 Rest · Nominal
+                    Mars Transit Day 42 · Sleep nominal
                   </div>
                 </div>
               </div>
@@ -2752,12 +2617,12 @@ export default function App() {
               {/* Mission Telemetry Trend Graph - Hero Feature */}
               {renderTelemetryCard()}
 
-              {/* SLEEK CURVED QUICK JUMP DOCK */}
+              {/* SOLID CURVED QUICK JUMP DOCK */}
               <div className="overview-quick-dock">
                 <div className="quick-dock-info">
-                  <span className="dock-beacon-dot" />
+                  <Activity size={18} style={{ color: '#0066ff' }} />
                   <span>
-                    Continuous Bio-Telemetry Downlink Active · Mission Day 042 · All physiological channels nominal
+                    Mission Day 042 Telemetry · Physiological parameters verified nominal
                   </span>
                 </div>
                 <div className="quick-dock-actions">
