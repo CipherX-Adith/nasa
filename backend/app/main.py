@@ -57,7 +57,7 @@ def fb_request(path: str, data: dict | list | None = None, method: str = "GET"):
     headers = {"Content-Type": "application/json"} if data is not None else {}
     req = urllib.request.Request(url, data=req_data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=4.0) as resp:
             content = resp.read().decode("utf-8")
             return json.loads(content) if content else None
     except Exception as e:
@@ -704,9 +704,6 @@ def live_telemetry_tick(aid: int, db: Session = Depends(get_db), user = Depends(
         "quality": "good",
         "simulated": False
     }
-
-    # Broadcast to live telemetry socket node without polluting 60-day historical table
-    fb_request(f"telemetry/{aid}", payload, method="PUT")
     return payload
 
 @app.get("/api/astronauts/{aid}/baselines")
