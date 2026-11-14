@@ -1,14 +1,25 @@
 import os
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
-from passlib.context import CryptContext
 
 SECRET_KEY = os.getenv("SECRET_KEY", "local-demo-secret-change-me")
 ALGORITHM = "HS256"
-pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def hash_password(value: str) -> str: return pwd.hash(value)
-def verify_password(value: str, hashed: str) -> bool: return pwd.verify(value, hashed)
+try:
+    import bcrypt
+    def hash_password(value: str) -> str:
+        return bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    def verify_password(value: str, hashed: str) -> bool:
+        try:
+            return bcrypt.checkpw(value.encode('utf-8'), hashed.encode('utf-8'))
+        except Exception:
+            return False
+except Exception:
+    from passlib.context import CryptContext
+    pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    def hash_password(value: str) -> str: return pwd.hash(value)
+    def verify_password(value: str, hashed: str) -> bool: return pwd.verify(value, hashed)
+
 def make_token(username: str, role: str) -> str:
     return jwt.encode({"sub": username, "role": role, "exp": datetime.now(timezone.utc)+timedelta(hours=12)}, SECRET_KEY, algorithm=ALGORITHM)
 def read_token(token: str):
