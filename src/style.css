@@ -64,11 +64,11 @@
   --shadow-panel: 0 4px 16px rgba(15, 23, 42, 0.05);
   --shadow-domain: 0 2px 8px rgba(15, 23, 42, 0.04);
 
-  --login-bg: #f1f5f9;
-  --login-art-bg: #f8fafc;
-  --orbit-border: rgba(0, 102, 255, 0.25);
-  --planet-bg: radial-gradient(circle at 35% 32%, #38bdf8, #0066ff 45%, #0052cc 80%, #033675 100%);
-  --planet-shadow: 0 0 40px rgba(0, 102, 255, 0.25), inset -15px -10px 25px rgba(0, 102, 255, 0.35);
+  --login-bg: #ffffff;
+  --login-art-bg: radial-gradient(ellipse at 58% 42%, #cbf3ec 0, #e0f2fe 35%, #f0f9ff 70%, #f8fafc 100%);
+  --orbit-border: rgba(13, 148, 136, 0.25);
+  --planet-bg: radial-gradient(circle at 35% 32%, #5eead4, #0d9488 45%, #0284c7 80%, #0369a1 100%);
+  --planet-shadow: 0 0 60px rgba(13, 148, 136, 0.25), inset -15px -10px 25px rgba(2, 132, 199, 0.4);
 }
 
 [data-theme="dark"] {
@@ -1246,34 +1246,35 @@ button {
 
 /* Clean Minimal Quick Demo Sign-In Pills */
 .login-quick-accounts {
-  margin-top: 18px;
-  padding-top: 14px;
+  margin-top: 24px;
+  padding-top: 18px;
   border-top: 1px solid var(--border-panel);
 }
 
 .login-quick-title {
   font-family: 'DM Mono', monospace;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .login-quick-pills {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 
 .quick-account-pill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  background: var(--bg-panel);
-  border: 1.5px solid var(--border-panel);
-  border-radius: 7px;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-panel);
+  border-radius: 8px;
   padding: 8px 12px;
   font-size: 12.5px;
   color: var(--text-main);
@@ -1283,18 +1284,18 @@ button {
 }
 
 .quick-account-pill:hover {
-  background: var(--primary-bg);
-  border-color: var(--primary-border);
-  color: var(--primary-accent);
+  background: #f0fdfa;
+  border-color: #0d9488;
+  color: #0f766e;
   transform: translateY(-1px);
 }
 
 .quick-account-pill.active {
-  background: var(--primary-bg);
-  border-color: var(--primary);
-  color: var(--primary-accent);
+  background: #f0fdfa;
+  border-color: #0d9488;
+  color: #0f766e;
   font-weight: 600;
-  box-shadow: 0 0 0 1px var(--primary);
+  box-shadow: 0 0 0 1.5px #0d9488;
 }
 
 .quick-account-pill.admin {
@@ -1306,7 +1307,7 @@ button {
   background: #fef3c7;
   border-color: #f59e0b;
   color: #92400e;
-  box-shadow: 0 0 0 1px #f59e0b;
+  box-shadow: 0 0 0 1.5px #f59e0b;
 }
 
 [data-theme='dark'] .quick-account-pill.admin:hover,
@@ -1318,6 +1319,25 @@ button {
 
 .pill-icon.admin {
   color: #d97706;
+}
+
+.pill-icon.astronaut {
+  color: #0284c7;
+}
+
+.pill-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.quick-account-pill.admin .pill-tag {
+  background: #fde68a;
+  color: #b45309;
 }
 
 .pill-icon.astronaut {
@@ -2527,75 +2547,160 @@ td {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  background: var(--bg-page);
+  background: #ffffff;
   color: var(--text-main);
   position: relative;
   transition: background-color 0.2s ease;
 }
 
+[data-theme="dark"] .login {
+  background: #08131e;
+}
+
+.theme-toggle-floating {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  z-index: 100;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  width: auto !important;
+  height: auto !important;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  border: 1px solid rgba(203, 213, 225, 0.85);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  color: var(--text-heading);
+  font: 600 13px 'DM Sans', sans-serif;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.18s ease;
+}
+
+.theme-toggle-floating:hover {
+  background: #ffffff;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+}
+
+[data-theme="dark"] .theme-toggle-floating {
+  background: rgba(15, 23, 42, 0.85);
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .theme-toggle-floating:hover {
+  background: #1e293b;
+  border-color: #64748b;
+}
+
 .login-card {
-  width: min(410px, 80%);
+  width: min(440px, 86%);
   margin: auto;
+  padding: 44px 0;
 }
 
 .login-card .brand {
   padding: 0;
+  margin-bottom: 28px;
 }
 
 .login-card .brand-logo {
-  width: 270px;
+  width: 220px;
+  height: auto;
+  display: block;
+}
+
+.login-card .brand small {
+  display: block;
+  font: 700 11px 'DM Mono', monospace;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin-top: 8px;
 }
 
 .login-card .eyebrow {
-  margin-top: 66px;
+  margin-top: 0;
+  margin-bottom: 8px;
+  font: 700 11.5px 'DM Mono', monospace;
+  letter-spacing: 0.12em;
+  color: #64748b;
+  text-transform: uppercase;
 }
 
 .login-card h1 {
-  font: 700 36px Manrope, sans-serif;
-  letter-spacing: -.05em;
-  line-height: 1.18;
-  margin: 12px 0;
+  font: 800 38px Manrope, sans-serif;
+  letter-spacing: -.04em;
+  line-height: 1.15;
+  margin: 0 0 14px;
   color: var(--text-heading);
 }
 
 .login-card>.muted {
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-muted);
+  margin-bottom: 20px;
 }
 
 .login form {
   display: grid;
-  gap: 14px;
-  margin-top: 27px;
+  gap: 15px;
+  margin-top: 18px;
 }
 
 .login form label {
-  font-size: 11.5px;
+  font: 600 12px 'DM Sans', sans-serif;
+  color: var(--text-muted);
+  display: grid;
+  gap: 6px;
 }
 
 .login form input {
-  padding: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: var(--text-main);
+  font: 500 14px 'DM Sans', sans-serif;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-theme="dark"] .login form input {
+  background: #0e1b27;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+.login form input:focus {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.18);
 }
 
 .login form>button {
   border: 0;
-  border-radius: 6px;
-  padding: 12px;
-  background: var(--primary);
-  color: var(--primary-text);
-  font-weight: 700;
+  border-radius: 8px;
+  padding: 13px 18px;
+  background: #0d9488;
+  color: #ffffff;
+  font: 700 14px 'DM Sans', sans-serif;
   text-align: left;
   cursor: pointer;
   transition: background-color .15s ease;
+  margin-top: 4px;
 }
 
 .login form>button:hover:not(:disabled) {
-  background: var(--primary-hover);
+  background: #0f766e;
 }
 
 .login form>button span,
 .ask-btn span {
   float: right;
+  font-weight: 700;
 }
 
 .credentials {
@@ -2609,7 +2714,7 @@ td {
 }
 
 .login-foot {
-  margin-top: 53px;
+  margin-top: 36px;
   border-top: 1px solid var(--border-panel);
   padding-top: 15px;
   display: flex;
@@ -2620,7 +2725,7 @@ td {
 }
 
 .login-foot svg {
-  color: var(--primary-accent);
+  color: #0d9488;
 }
 
 .login-art {
@@ -2646,12 +2751,15 @@ td {
 }
 
 .orbit-two {
+  position: absolute;
   transform: rotate(28deg);
   width: 700px;
   height: 420px;
   left: 1%;
   top: 16%;
-  border-color: var(--orbit-border);
+  border-radius: 50%;
+  border: 1px solid var(--orbit-border);
+  pointer-events: none;
 }
 
 .planet {
@@ -2672,23 +2780,31 @@ td {
 }
 
 .art-copy span {
-  font: 11.5px 'DM Mono', monospace;
+  font: 700 12px 'DM Mono', monospace;
   letter-spacing: .15em;
-  color: var(--primary-accent);
-  font-weight: 600;
+  color: #0d9488;
+  display: block;
+  margin-bottom: 8px;
+}
+
+[data-theme="dark"] .art-copy span {
+  color: #2dd4bf;
 }
 
 .art-copy h2 {
-  font: 700 32px Manrope, sans-serif;
+  font: 800 34px Manrope, sans-serif;
   line-height: 1.18;
   letter-spacing: -.04em;
-  margin: 12px 0;
+  margin: 0 0 10px;
   color: var(--text-heading);
 }
 
 .art-copy p {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
+  margin: 0;
+  max-width: 360px;
+  line-height: 1.55;
 }
 
 .error {
