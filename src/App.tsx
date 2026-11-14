@@ -19,7 +19,6 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock3,
-  Droplets,
   FilePlus,
   FileText,
   Heart,
@@ -41,7 +40,7 @@ import {
   Wind,
   XCircle,
 } from 'lucide-react';
-import { DigitalTwinViewer, OrganKey } from './components/DigitalTwinViewer';
+import type { OrganKey } from './components/DigitalTwinViewer';
 import {
   isFirebaseEnabled,
   subscribeToAssessments,
@@ -1223,7 +1222,7 @@ export default function App() {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const title = telemetryMode === 'hourly'
-      ? `${data.hour || label} · Day 42 illustrative profile${data.is_current ? ' · latest stored reading' : ''}`
+        ? `${data.hour || label} · Day 42 illustrative profile${data.is_current ? ' · latest stored reading' : ''}`
         : (data.dayFull || label);
 
       return (
@@ -1756,8 +1755,8 @@ export default function App() {
               {isHourly
                 ? `Illustrative generated hourly profile for ${astronaut?.name || 'astronaut'} · Mars Transit Day 42`
                 : (isAdmin
-                    ? `Tracking longitudinal adaptation for ${astronaut?.name || 'astronaut'} relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`
-                    : `Tracking your personal adaptation relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`)}
+                  ? `Tracking longitudinal adaptation for ${astronaut?.name || 'astronaut'} relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`
+                  : `Tracking your personal adaptation relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`)}
             </p>
           </div>
 
@@ -1912,7 +1911,7 @@ export default function App() {
             <span className="legend-item">
               <span className="legend-line baseline-line" /> Baseline Median
             </span>
-              {!isHourly && <span className="legend-item"><span className="legend-dot drift-dot" /> Baseline deviation</span>}
+            {!isHourly && <span className="legend-item"><span className="legend-dot drift-dot" /> Baseline deviation</span>}
             {isHourly && (
               <span className="legend-item">
                 <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#0284c7', marginRight: 4 }} /> Current hour marker
@@ -2017,7 +2016,7 @@ export default function App() {
             {dailyReportData.abnormal_behaviours && dailyReportData.abnormal_behaviours.length > 0 && (
               <div>
                 <div className="report-section-title">
-                <AlertTriangle size={16} color="#ef4444" /> Illustrative baseline deviations for review ({dailyReportData.abnormal_behaviours.length})
+                  <AlertTriangle size={16} color="#ef4444" /> Illustrative baseline deviations for review ({dailyReportData.abnormal_behaviours.length})
                 </div>
                 <div className="warning-items-grid">
                   {dailyReportData.abnormal_behaviours.map((b: Any, idx: number) => (
@@ -2172,492 +2171,6 @@ export default function App() {
           📋 Daily Clinical Report
         </button>
       </div>
-    );
-  };
-
-  // Dynamic Astronaut Demographic Profile for ClyHealth Widget (Age, Sex, Height, Weight)
-  const getCrewDemographics = (crewName?: string, callSign?: string) => {
-    const name = (crewName || '').toLowerCase();
-    const sign = (callSign || '').toLowerCase();
-
-    if (name.includes('david') || sign.includes('nova') || sign.includes('3')) {
-      return {
-        bioAge: 47,
-        chronoAge: 42,
-        sex: 'Male ♂',
-        height: '182',
-        heightUnit: 'cm',
-        weight: '97.5',
-        weightDelta: '▲ +1.5 kg',
-        agingYears: 5,
-      };
-    }
-    if (name.includes('elena') || sign.includes('vega') || sign.includes('2')) {
-      return {
-        bioAge: 41,
-        chronoAge: 39,
-        sex: 'Female ♀',
-        height: '172',
-        heightUnit: 'cm',
-        weight: '66.8',
-        weightDelta: '▲ +0.6 kg',
-        agingYears: 2,
-      };
-    }
-    // Default: Maya Chen (or active crew)
-    return {
-      bioAge: 38,
-      chronoAge: 34,
-      sex: 'Female ♀',
-      height: '168',
-      heightUnit: 'cm',
-      weight: '62.4',
-      weightDelta: '▲ +0.8 kg',
-      agingYears: 4,
-    };
-  };
-
-  // Reusable ClyHealth Biometrics Capsule Widget showing Age, Sex, Height, and Weight
-  const renderBiometricsCapsuleWidget = (showAgingAlert = true, customCrew?: any) => {
-    const targetCrew =
-      customCrew ||
-      astronaut ||
-      (astronauts && astronauts.find((a: Any) => a.id === selected)) ||
-      astronauts[0];
-    const demo = getCrewDemographics(targetCrew?.name, targetCrew?.call_sign);
-
-    return (
-      <div className="cly-biometrics-capsule-widget">
-        {/* 1. Biological Age */}
-        <div className="cly-bio-item">
-          <div className="cly-bio-mark blue-mark" />
-          <div className="cly-bio-content">
-            <span className="cly-bio-label">Biological age</span>
-            <span className="cly-bio-val">
-              {demo.bioAge} <small>yrs</small>
-            </span>
-          </div>
-        </div>
-
-        {/* 2. Chronological Age */}
-        <div className="cly-bio-item">
-          <div className="cly-bio-mark gray-mark" />
-          <div className="cly-bio-content">
-            <span className="cly-bio-label">Chronological age</span>
-            <span className="cly-bio-val">
-              {demo.chronoAge} <small>yrs</small>
-            </span>
-          </div>
-        </div>
-
-        {/* 3. Sex */}
-        <div className="cly-bio-item">
-          <div className="cly-bio-mark blue-mark" />
-          <div className="cly-bio-content">
-            <span className="cly-bio-label">Sex</span>
-            <span className="cly-bio-val cly-sex-text">
-              {demo.sex}
-            </span>
-          </div>
-        </div>
-
-        {/* 4. Height */}
-        <div className="cly-bio-item">
-          <div className="cly-bio-mark blue-mark" />
-          <div className="cly-bio-content">
-            <span className="cly-bio-label">Height</span>
-            <span className="cly-bio-val">
-              {demo.height} <small>{demo.heightUnit}</small>
-            </span>
-          </div>
-        </div>
-
-        {/* 5. Weight */}
-        <div className="cly-bio-item">
-          <div className="cly-bio-mark blue-mark" />
-          <div className="cly-bio-content">
-            <span className="cly-bio-label">Weight</span>
-            <span className="cly-bio-val">
-              {demo.weight} <span className="cly-bio-delta">{demo.weightDelta}</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Optional Aging Delta Notification Badge */}
-        {showAgingAlert && (
-          <div className="cly-aging-alert-badge" title="Microgravity & epigenetic aging drift">
-            <span>
-              Your body is aging <strong style={{ color: '#ef4444' }}>{demo.agingYears} years</strong> faster than your chronological age.
-            </span>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Liquid Glass Digital Twin Master Component (with Reduced Telemetry Graph & Interactive Anatomical Body)
-  const renderLiquidGlassDigitalTwinSection = () => {
-    const isHourly = telemetryMode === 'hourly';
-    const activePoints = isHourly ? hourlyChartData.points : telemetryData.points;
-    const activeDomain = isHourly ? hourlyChartData.domain : telemetryData.domain;
-    const activeTicks = isHourly ? hourlyChartData.ticks : telemetryData.ticks;
-    const currentVal = latest(backendMetric)?.value ?? latest(selectedMetric)?.value ?? activePoints.at(-1)?.value ?? liveVitals.heartRate;
-
-    return (
-      <section className="liquid-glass-atmosphere">
-        {/* Top Biometrics Floating Bar (Reference ClyHealth design) */}
-        <div className="glass-biometrics-bar">
-          <div className="glass-brand-block">
-            <div className="glass-brand-logo">
-              <span className="cly-rainbow-icon">
-                <Sparkles size={20} />
-              </span>{' '}
-              ClyHealth
-            </div>
-            <div className="glass-crumb">
-              <span>🏠</span> <span>/</span> System Reports <span>Methylation risk score</span>
-            </div>
-          </div>
-
-          {renderBiometricsCapsuleWidget(true)}
-        </div>
-
-        {/* Two-Column Master Grid: Left: Risk Cards & Reduced Graph; Right: Digital Twin Body */}
-        <div className="digital-twin-layout">
-          {/* Left Column: Risk Score, Contributing Factors, Domain Risk Cards & Reduced Graph */}
-          <div className="twin-left-col">
-            {/* Top Row: Risk Score + Why The Risk? */}
-            <div className="risk-cards-grid">
-              {/* Card 1: Methylation Risk Score */}
-              <div className="glass-panel-card">
-                <div className="glass-panel-head">
-                  <h4 className="glass-panel-title">Methylation Risk Score</h4>
-                  <span className="risk-level-tag moderate">● Moderate Risk</span>
-                </div>
-
-                <div className="risk-score-display">
-                  <div className="risk-big-score">
-                    0.76 <span className="score-percent-sign">%</span> <small>/ 45 Actual age</small>
-                  </div>
-                </div>
-
-                {/* Gradient Risk Bar with Needle Pin */}
-                <div className="risk-gradient-track">
-                  <div className="risk-needle-pin" style={{ left: '76%' }} title="Current Risk Level: 76%" />
-                </div>
-
-                <div className="risk-range-labels">
-                  <span>0</span>
-                  <span>30</span>
-                </div>
-
-                <div className="risk-score-subhead">Risk Score</div>
-                <p className="risk-narrative-text">
-                  You have an 18.4% risk of a cardiovascular event in 10 years, placing you in the moderate risk category for your age and gen...
-                </p>
-
-                <div className="areas-concern-box">
-                  <div className="areas-concern-head">
-                    <span className="concern-label">Areas of Concern</span>
-                    <div className="concern-legend">
-                      <span><span className="legend-indicator low" /> Low</span>
-                      <span><span className="legend-indicator med" /> Medium</span>
-                      <span><span className="legend-indicator high" /> High</span>
-                    </div>
-                  </div>
-                  <div className="risk-areas-row">
-                    <span className="risk-area-pill high"><span className="legend-indicator high" /> Atrial Fibrillation</span>
-                    <span className="risk-area-pill high"><span className="legend-indicator high" /> Pulmonary Embolism</span>
-                    <span className="risk-area-pill med"><span className="legend-indicator med" /> Hypertension</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: Why The Risk? Contributing Factors */}
-              <div className="glass-panel-card">
-                <div className="glass-panel-head">
-                  <h4 className="glass-panel-title">Why The Risk?</h4>
-                  <button
-                    type="button"
-                    className="twin-view-all-btn"
-                    onClick={() => handleTabChange('Medical records')}
-                  >
-                    View all data
-                  </button>
-                </div>
-
-                <p className="why-risk-subtext">The score is primarily influenced by:</p>
-
-                <div className="cly-factors-list">
-                  {/* Factor 1: LDL */}
-                  <div className="cly-factor-card">
-                    <div className="cly-factor-title">Elevated LDL Cholesterol</div>
-                    <div className="cly-factor-val-line">
-                      <span className="cly-val-dot orange" />
-                      <span className="cly-val-number">145</span>
-                      <span className="cly-val-unit">mg/dL</span>
-                    </div>
-                    <div className="cly-factor-note">
-                      <span className="cly-note-line amber" /> Increases plaque buildup in arteries
-                    </div>
-                  </div>
-
-                  {/* Factor 2: High Blood Pressure */}
-                  <div className="cly-factor-card">
-                    <div className="cly-factor-title">High Blood Pressure</div>
-                    <div className="cly-factor-val-line">
-                      <span className="cly-val-dot red" />
-                      <span className="cly-val-number">130/85</span>
-                      <span className="cly-val-unit">mmHg</span>
-                    </div>
-                    <div className="cly-factor-note">
-                      <span className="cly-note-line red" /> Puts extra strain on the heart and blood vessels
-                    </div>
-                  </div>
-
-                  {/* Factors 3 & 4 Dual Row */}
-                  <div className="cly-dual-factors">
-                    <div className="cly-dual-item">
-                      <div className="cly-dual-title">Sedentary Lifestyle</div>
-                      <div className="cly-dual-note">
-                        <span className="cly-note-line amber" /> Increases cholesterol & BP
-                      </div>
-                    </div>
-                    <div className="cly-dual-item">
-                      <div className="cly-dual-title">Heart disease in family</div>
-                      <div className="cly-dual-note">
-                        <span className="cly-note-line amber" /> Increases baseline risk
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Epigenetic Disease Risk Profile 3-Card Row */}
-            <div className="epigenetic-profile-block">
-              <h4 className="epigenetic-heading">Epigenetic Disease Risk Profile</h4>
-              <div className="domain-risk-profile-grid">
-                {/* Card 1: T2 Diabetes */}
-                <div
-                  className={`domain-risk-card ${selectedOrgan === 'immune' ? 'active' : ''}`}
-                  onClick={() => handleSelectOrgan('immune')}
-                >
-                  <div>
-                    <div className="domain-risk-card-head">
-                      <span className="domain-risk-title">
-                        <Droplets size={14} color="#0284c7" /> T2 Diabetes
-                      </span>
-                      <span className="domain-risk-pill suboptimal">Suboptimal</span>
-                    </div>
-                    <div className="domain-risk-percentile">
-                      <div className="percentile-label">Polygenic risk score</div>
-                      <div className="percentile-val">44th percentile</div>
-                    </div>
-                    <div className="cly-markers-box">
-                      <span className="markers-label">Genetic markers</span>
-                      <div className="markers-chips">
-                        <span><span className="marker-dot" /> TCF7L2</span>
-                        <span><span className="marker-dot" /> PPARG</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="cly-action-pill-box">
-                    <span className="cly-action-emoji">🏃</span>
-                    <div>
-                      <div className="cly-action-name">Exercise</div>
-                      <div className="cly-action-desc">Do ≥150 min moderate aerobic exercise/week (e.g...</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 2: Alzheimer's */}
-                <div
-                  className={`domain-risk-card ${selectedOrgan === 'brain' ? 'active' : ''}`}
-                  onClick={() => handleSelectOrgan('brain')}
-                >
-                  <div>
-                    <div className="domain-risk-card-head">
-                      <span className="domain-risk-title">
-                        <Brain size={14} color="#0d9488" /> Alzheimer's
-                      </span>
-                      <span className="domain-risk-pill optimal">Optimal</span>
-                    </div>
-                    <div className="domain-risk-percentile">
-                      <div className="percentile-label">Polygenic risk score</div>
-                      <div className="percentile-val">12th percentile</div>
-                    </div>
-                    <div className="cly-markers-box">
-                      <span className="markers-label">Genetic markers</span>
-                      <div className="markers-chips">
-                        <span><span className="marker-dot teal" /> APOE</span>
-                        <span><span className="marker-dot teal" /> PSEN1</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="cly-action-pill-box">
-                    <span className="cly-action-emoji">💊</span>
-                    <div>
-                      <div className="cly-action-name">Omega-3 Fatty Acids</div>
-                      <div className="cly-action-desc">Focus on a heart-healthy diet to boost HDL and sup...</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 3: Cardiovascular */}
-                <div
-                  className={`domain-risk-card ${selectedOrgan === 'heart' ? 'active' : ''}`}
-                  onClick={() => handleSelectOrgan('heart')}
-                >
-                  <div>
-                    <div className="domain-risk-card-head">
-                      <span className="domain-risk-title">
-                        <Activity size={14} color="#ef4444" /> Cardiovascular
-                      </span>
-                      <span className="domain-risk-pill critical">Critical</span>
-                    </div>
-                    <div className="domain-risk-percentile">
-                      <div className="percentile-label">Polygenic risk score</div>
-                      <div className="percentile-val">91st percentile</div>
-                    </div>
-                    <div className="cly-markers-box">
-                      <span className="markers-label">Genetic markers</span>
-                      <div className="markers-chips">
-                        <span><span className="marker-dot red" /> TCF7L2</span>
-                        <span><span className="marker-dot red" /> cg18064256</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="cly-action-pill-box">
-                    <span className="cly-action-emoji">🩺</span>
-                    <div>
-                      <div className="cly-action-name">Monitor your blood pressu...</div>
-                      <div className="cly-action-desc">Your BP is slightly high (135/75). Follow the report r...</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Integrated Organ Telemetry Trend Graph */}
-            <div className="reduced-telemetry-container">
-              <div className="reduced-telemetry-header">
-                <div className="reduced-telemetry-title-block">
-                  <h3>
-                    Telemetry Trend: {selectedMetric}
-                    <span className="organ-tag-badge">
-                      {selectedOrgan.toUpperCase()} TARGET
-                    </span>
-                  </h3>
-                  <p className="telemetry-subtitle" style={{ margin: 0 }}>
-                    {isHourly
-                      ? `24-hour circadian telemetry profile · ${selectedMetric} (${telemetryData.unit})`
-                      : `60-day longitudinal mission adaptation relative to calibrated baseline (${telemetryData.median} ${telemetryData.unit})`}
-                  </p>
-                </div>
-
-                {/* Controls: Mode Toggle */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <div className="telemetry-mode-toggle">
-                    <button
-                      type="button"
-                      className={`mode-toggle-btn ${isHourly ? 'active' : ''}`}
-                      onClick={() => setTelemetryMode('hourly')}
-                    >
-                      ⏱️ 24-Hour
-                    </button>
-                    <button
-                      type="button"
-                      className={`mode-toggle-btn ${!isHourly ? 'active' : ''}`}
-                      onClick={() => setTelemetryMode('mission')}
-                    >
-                      📅 60-Day
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Metric selection pills for the active organ */}
-              <div className="telemetry-pills" style={{ marginTop: 4, marginBottom: 8 }}>
-                {availablePills.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    className={`pill-btn ${selectedMetric === p ? 'active' : ''}`}
-                    onClick={() => setSelectedMetric(p)}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-
-              {/* Live Downlink Ticker */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'rgba(13, 148, 136, 0.05)', borderRadius: 8, fontSize: '11.5px', color: 'var(--text-muted)', marginBottom: 8 }}>
-                <span>
-                  <b>Live Telemetry:</b> {currentVal ?? '—'} {telemetryData.unit}
-                </span>
-                <span>LEO Downlink: 0.25 Hz · Packets: {packetCount}</span>
-              </div>
-
-              {/* The Reduced Recharts Chart */}
-              <div className="reduced-chart-stage">
-                <ResponsiveContainer width="100%" height={230}>
-                  <AreaChart data={activePoints} margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="reduced-fill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#0284c7" stopOpacity={0.28} />
-                        <stop offset="100%" stopColor="#0284c7" stopOpacity={0.01} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
-                    <XAxis dataKey="dayLabel" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                    <YAxis domain={activeDomain} ticks={activeTicks} stroke="var(--text-muted)" fontSize={11} tickLine={false} />
-                    <Tooltip
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const d = payload[0].payload;
-                          return (
-                            <div className="chart-tooltip">
-                              <div className="tooltip-title">{d.dayLabel}</div>
-                              <div className="tooltip-value">
-                                {d.value} {d.unit}
-                              </div>
-                              {d.isDrift && (
-                                <div className="tooltip-drift-tag">⚠️ Drift Detected</div>
-                              )}
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <ReferenceLine y={telemetryData.median} stroke="#0284c7" strokeDasharray="4 4" strokeWidth={1.4} />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#0284c7"
-                      strokeWidth={2.4}
-                      fill="url(#reduced-fill)"
-                      dot={<CustomDot />}
-                      activeDot={{ r: 5, fill: '#0284c7', stroke: '#ffffff', strokeWidth: 2 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column: Interactive Digital Twin Body Model */}
-          <div className="twin-right-col">
-            <DigitalTwinViewer
-              selectedOrgan={selectedOrgan}
-              onSelectOrgan={handleSelectOrgan}
-              astronautName={astronaut?.name}
-              vitals={liveVitals}
-            />
-          </div>
-        </div>
-      </section>
     );
   };
 
@@ -3113,10 +2626,7 @@ export default function App() {
                 {renderHeaderCrewControls()}
               </div>
 
-              {/* ClyHealth Biometrics Demographic Capsule Widget (Age, Sex, Height, Weight) */}
-              <div className="overview-biometrics-bar-container" style={{ margin: '4px 0 18px 0' }}>
-                {renderBiometricsCapsuleWidget(true)}
-              </div>
+              {/* ADMIN ABILITY: FLEET OPERATIONAL READINESS & CREW TRIAGE */}
               {renderFleetTriage()}
 
               {/* ASTRONAUT ABILITY: DAILY COUNTERMEASURE ADHERENCE TRACKER */}
@@ -3191,8 +2701,8 @@ export default function App() {
               {/* Abnormal Behaviour Warning Banner */}
               {renderAbnormalWarningBanner()}
 
-              {/* Liquid Glass Digital Twin & Reduced Telemetry Trend */}
-              {renderLiquidGlassDigitalTwinSection()}
+              {/* Telemetry Trend Graph */}
+              {renderTelemetryCard()}
 
               <div className="grid-main">
                 <section className="panel alert-panel">
@@ -3485,10 +2995,7 @@ export default function App() {
                 {renderHeaderCrewControls()}
               </div>
 
-              {/* ClyHealth Biometrics Demographic Capsule Widget (Age, Sex, Height, Weight) */}
-              <div className="overview-biometrics-bar-container" style={{ margin: '4px 0 18px 0' }}>
-                {renderBiometricsCapsuleWidget(false)}
-              </div>
+              {/* Abnormal Behaviour Warning Banner */}
               {renderAbnormalWarningBanner()}
 
               {/* Cardiovascular Telemetry Trend */}
@@ -4356,10 +3863,6 @@ export default function App() {
                 {renderHeaderCrewControls()}
               </div>
 
-              {/* ClyHealth Biometrics Demographic Capsule Widget (Age, Sex, Height, Weight) */}
-              <div className="overview-biometrics-bar-container" style={{ margin: '4px 0 18px 0' }}>
-                {renderBiometricsCapsuleWidget(true)}
-              </div>
               <section className="panel">
                 <div className="panel-head">
                   <div>
@@ -4612,7 +4115,7 @@ export default function App() {
                     <p>{assistantStatus?.configured
                       ? `Gemini (${assistantStatus.model}) is available. Replies use retrieved project records.`
                       : assistantStatus ? 'Responses are generated from available local project records. Add a Gemini API key on the backend for live AI explanations.'
-                      : 'Assistant mode could not be checked. Verify the backend connection.'}</p>
+                        : 'Assistant mode could not be checked. Verify the backend connection.'}</p>
                   </div>
                 </div>
                 <form className="assistant-form" onSubmit={askAssistant}>
@@ -4692,51 +4195,52 @@ export default function App() {
                 <div className="clinical-modal-brand">ORBITCARE TELEMEDICINE · MISSION CONTROL LINK</div>
                 <h3>Request Flight Surgeon Consultation</h3>
                 <p>
-                Send a consultation request to the mission medical review queue. State any symptoms, fatigue, or concerns you want reviewed.
+                  Send a consultation request to the mission medical review queue. State any symptoms, fatigue, or concerns you want reviewed.
                 </p>
               </div>
-              <button
-                type="button"
-                className="clinical-modal-close"
-                onClick={() => setConsultModalOpen(false)}
-              >
-                ✕
-              </button>
+            <button
+              type="button"
+              className="clinical-modal-close"
+              onClick={() => setConsultModalOpen(false)}
+            >
+              ✕
+            </button>
+          </div>
+
+          <textarea
+            className="consult-textarea"
+            placeholder="Describe your symptoms or reason for consult (e.g., 'Experiencing mild dizziness during morning centrifuge prep; requesting evaluation.')..."
+            value={consultNote}
+            onChange={(e) => setConsultNote(e.target.value)}
+          />
+
+          {consultFeedback && (
+            <div style={{ font: "600 12.5px 'DM Sans'", color: consultFeedback.startsWith('✓') ? '#059669' : '#dc2626', marginBottom: 14 }}>
+              {consultFeedback}
             </div>
+          )}
 
-            <textarea
-              className="consult-textarea"
-              placeholder="Describe your symptoms or reason for consult (e.g., 'Experiencing mild dizziness during morning centrifuge prep; requesting evaluation.')..."
-              value={consultNote}
-              onChange={(e) => setConsultNote(e.target.value)}
-            />
-
-            {consultFeedback && (
-              <div style={{ font: "600 12.5px 'DM Sans'", color: consultFeedback.startsWith('✓') ? '#059669' : '#dc2626', marginBottom: 14 }}>
-                {consultFeedback}
-              </div>
-            )}
-
-            <div className="consult-actions">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setConsultModalOpen(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary-action"
-                disabled={consultSubmitting || !consultNote.trim()}
-                onClick={handleSendConsult}
-              >
-                {consultSubmitting ? 'Transmitting…' : '🚀 Transmit Priority Request'}
-              </button>
-            </div>
+          <div className="consult-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setConsultModalOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary-action"
+              disabled={consultSubmitting || !consultNote.trim()}
+              onClick={handleSendConsult}
+            >
+              {consultSubmitting ? 'Transmitting…' : '🚀 Transmit Priority Request'}
+            </button>
           </div>
         </div>
-      )}
-    </div>
+        </div>
+  )
+}
+    </div >
   );
 }
