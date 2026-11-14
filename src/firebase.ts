@@ -17,15 +17,29 @@ import {
 export interface FirebaseConfig {
   apiKey: string;
   authDomain?: string;
+  databaseURL?: string;
   projectId: string;
   storageBucket?: string;
   messagingSenderId?: string;
   appId: string;
+  measurementId?: string;
 }
 
 const STORAGE_KEY = 'orbitcare_firebase_config';
 
-export function getSavedFirebaseConfig(): FirebaseConfig | null {
+// User's project configuration
+export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
+  apiKey: "AIzaSyArHxBEYICb6nWLJA9sa-QRwJsz7lSNBwI",
+  authDomain: "orbitcare-afcc9.firebaseapp.com",
+  databaseURL: "https://orbitcare-afcc9-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "orbitcare-afcc9",
+  storageBucket: "orbitcare-afcc9.firebasestorage.app",
+  messagingSenderId: "869455531572",
+  appId: "1:869455531572:web:21bf4a38ced2d2e4784461",
+  measurementId: "G-Q2NZ2ZQWWE"
+};
+
+export function getSavedFirebaseConfig(): FirebaseConfig {
   // 1. Check localStorage first
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -37,21 +51,24 @@ export function getSavedFirebaseConfig(): FirebaseConfig | null {
     }
   } catch {}
 
-  // 2. Fall back to Vite environment variables
+  // 2. Check Vite environment variables
   const envKey = import.meta.env.VITE_FIREBASE_API_KEY;
   const envProject = import.meta.env.VITE_FIREBASE_PROJECT_ID;
   if (envKey && envProject) {
     return {
       apiKey: envKey,
       authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || `${envProject}.firebaseapp.com`,
+      databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || DEFAULT_FIREBASE_CONFIG.databaseURL,
       projectId: envProject,
-      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || `${envProject}.appspot.com`,
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || `${envProject}.firebasestorage.app`,
       messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
       appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+      measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
     };
   }
 
-  return null;
+  // 3. Fallback to embedded default configuration
+  return DEFAULT_FIREBASE_CONFIG;
 }
 
 export function saveFirebaseConfig(cfg: FirebaseConfig) {
@@ -109,7 +126,7 @@ export function isFirebaseEnabled(): boolean {
 }
 
 /**
- * Real-time subscription to astronaut assessments collection
+ * Real-time subscription to astronaut assessments collection in Firestore
  */
 export function subscribeToAssessments(
   astronautId: number,
@@ -143,7 +160,7 @@ export function subscribeToAssessments(
         onData(items);
       },
       (err) => {
-        console.warn('Firestore assessments snapshot error:', err);
+        console.warn('Firestore assessments snapshot listener note:', err.message);
       }
     );
 
@@ -201,7 +218,7 @@ export function subscribeToAlerts(onData: (alerts: any[]) => void): () => void {
         onData(items);
       },
       (err) => {
-        console.warn('Firestore alerts snapshot error:', err);
+        console.warn('Firestore alerts snapshot listener note:', err.message);
       }
     );
     return unsubscribe;
