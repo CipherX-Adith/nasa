@@ -16,7 +16,9 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  Database,
   FileText,
+  Flame,
   HeartPulse,
   LayoutDashboard,
   LogOut,
@@ -29,7 +31,18 @@ import {
   UserCheck,
   Users,
   Wind,
+  X,
 } from 'lucide-react';
+import {
+  isFirebaseEnabled,
+  getSavedFirebaseConfig,
+  saveFirebaseConfig,
+  clearFirebaseConfig,
+  subscribeToAssessments,
+  saveAssessmentToFirebase,
+  streamTelemetryToFirebase,
+  type FirebaseConfig,
+} from './firebase';
 
 const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000/api' : '/api');
 const API = API_BASE.replace(/\/+$/, '');
@@ -102,7 +115,22 @@ export default function App() {
     };
   });
 
-  // Login form controlled state for easy 1-click preset switching
+  // Firebase Real-time Cloud Database State
+  const [firebaseActive, setFirebaseActive] = useState(isFirebaseEnabled());
+  const [showFirebaseModal, setShowFirebaseModal] = useState(false);
+  const [firebaseStatusMsg, setFirebaseStatusMsg] = useState('');
+  const [firebaseInputConfig, setFirebaseInputConfig] = useState<FirebaseConfig>(() => {
+    return (
+      getSavedFirebaseConfig() || {
+        apiKey: '',
+        authDomain: '',
+        projectId: '',
+        storageBucket: '',
+        messagingSenderId: '',
+        appId: '',
+      }
+    );
+  });
   const [usernameInput, setUsernameInput] = useState('medical');
   const [passwordInput, setPasswordInput] = useState('orbitcare-demo');
 
@@ -315,6 +343,11 @@ export default function App() {
           setMeasurements((prev) => [...prev, tickData]);
           setPacketCount((c) => c + 1);
           setLastSyncTime(new Date());
+
+          // Stream to Firebase in real-time if active
+          if (firebaseActive) {
+            streamTelemetryToFirebase(targetId, tickData).catch(() => {});
+          }
         }
       } catch (e) {
         console.warn('Real-time telemetry tick error:', e);
@@ -322,7 +355,7 @@ export default function App() {
     }, 4000);
 
     return () => clearInterval(streamInterval);
-  }, [token, liveStreaming, selected, user, measurements, astronaut, astronauts]);
+  }, [token, liveStreaming, selected, user, measurements, astronaut, astronauts, firebaseActive]);
 
   // Real-time background sync for alerts and assessments (every 8 seconds)
   useEffect(() => {
@@ -368,6 +401,37 @@ export default function App() {
 
     return () => clearInterval(syncInterval);
   }, [token, liveStreaming, selected, user, astronaut, astronauts]);
+
+  // Real-time Firebase Firestore Subscription
+  useEffect(() => {
+    if (!firebaseActive) return;
+    const targetId =
+      user?.role !== 'medical' && user?.astronaut_id
+        ? user.astronaut_id
+        : selected || astronaut?.id || astronauts[0]?.id || 1;
+
+    const unsubscribe = subscribeToAssessments(targetId, (cloudAssessments) => {
+      if (cloudAssessments && cloudAssessments.length > 0) {
+        setAssessmentsList((prev) => {
+          const merged = [...prev];
+          for (const item of cloudAssessments) {
+            const exists = merged.some(
+              (x: Any) =>
+                x.id === item.id ||
+                (x.timestamp === item.timestamp && x.symptoms === item.symptoms)
+            );
+            if (!exists) merged.push(item);
+          }
+          return merged.sort(
+            (a, b) =>
+              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+        });
+      }
+    });
+
+    return () => unsubscribe();
+  }, [firebaseActive, selected, user, astronaut, astronauts]);
 
   // Mapping from pill label to underlying measurement metric in database
   const metricMap: Record<string, string> = {
@@ -1170,6 +1234,21 @@ export default function App() {
               <span className="radar-beacon-dot" />
               <span className="live-sync-label">{liveStreaming ? 'LIVE SYNC' : 'PAUSED'}</span>
               <span className="live-sync-cadence">4s</span>
+            </button>
+
+            {/* Firebase Cloud Sync Status & Config Modal Trigger */}
+            <button
+              type="button"
+              className={`firebase-sync-pill ${firebaseActive ? 'active' : 'inactive'}`}
+              onClick={() => setShowFirebaseModal(true)}
+              title={
+                firebaseActive
+                  ? 'Firebase Cloud Database Active · Real-time Firestore Sync Enabled'
+                  : 'Click to configure Google Firebase Cloud Database'
+              }
+            >
+              <Flame size={13} color={firebaseActive ? '#f59e0b' : '#94a3b8'} />
+              <span>{firebaseActive ? 'Firebase: Active' : 'Connect Firebase'}</span>
             </button>
 
             <div className="avatar small">
@@ -2030,6 +2109,14 @@ export default function App() {
                             const prevStored = JSON.parse(localStorage.getItem(key) || '[]');
                             localStorage.setItem(key, JSON.stringify([...prevStored, finalEntry]));
                           } catch {}
+
+                          // If Firebase Cloud Database is active, save to Firestore in real-time!
+                          if (firebaseActive) {
+                            saveAssessmentToFirebase(targetId, payload).catch((e) =>
+                              console.warn('Firebase save error:', e)
+                            );
+                          }
+
                           return updated;
                         });
 
@@ -2360,6 +2447,147 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* FIREBASE CLOUD DATABASE CONFIGURATION MODAL */}
+      {showFirebaseModal && (
+        <div className="modal-backdrop" onClick={() => setShowFirebaseModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div className="modal-title">
+                <Flame size={20} color="#f59e0b" />
+                <h3>Firebase Cloud Database</h3>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowFirebaseModal(false)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="modal-desc">
+              Connect Google Firebase (Firestore) to enable real-time cloud data synchronization across all devices and astronauts anywhere in the world.
+            </p>
+
+            {firebaseStatusMsg && (
+              <div className="modal-status-msg">{firebaseStatusMsg}</div>
+            )}
+
+            <div className="modal-form-grid">
+              <label>
+                Project ID *
+                <input
+                  placeholder="e.g. orbitcare-nasa"
+                  value={firebaseInputConfig.projectId}
+                  onChange={(e) =>
+                    setFirebaseInputConfig({
+                      ...firebaseInputConfig,
+                      projectId: e.target.value.trim(),
+                    })
+                  }
+                />
+              </label>
+
+              <label>
+                API Key *
+                <input
+                  type="password"
+                  placeholder="AIzaSy..."
+                  value={firebaseInputConfig.apiKey}
+                  onChange={(e) =>
+                    setFirebaseInputConfig({
+                      ...firebaseInputConfig,
+                      apiKey: e.target.value.trim(),
+                    })
+                  }
+                />
+              </label>
+
+              <label>
+                Auth Domain (optional)
+                <input
+                  placeholder="orbitcare-nasa.firebaseapp.com"
+                  value={firebaseInputConfig.authDomain || ''}
+                  onChange={(e) =>
+                    setFirebaseInputConfig({
+                      ...firebaseInputConfig,
+                      authDomain: e.target.value.trim(),
+                    })
+                  }
+                />
+              </label>
+
+              <label>
+                App ID (optional)
+                <input
+                  placeholder="1:123456789:web:abcdef..."
+                  value={firebaseInputConfig.appId || ''}
+                  onChange={(e) =>
+                    setFirebaseInputConfig({
+                      ...firebaseInputConfig,
+                      appId: e.target.value.trim(),
+                    })
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  if (!firebaseInputConfig.projectId || !firebaseInputConfig.apiKey) {
+                    setFirebaseStatusMsg('⚠️ Project ID and API Key are required.');
+                    return;
+                  }
+                  saveFirebaseConfig(firebaseInputConfig);
+                  setFirebaseActive(true);
+                  setFirebaseStatusMsg('✅ Connected to Firebase Cloud Database!');
+                  setTimeout(() => {
+                    setShowFirebaseModal(false);
+                    setFirebaseStatusMsg('');
+                  }, 1200);
+                }}
+              >
+                Save & Connect
+              </button>
+
+              {firebaseActive && (
+                <button
+                  type="button"
+                  className="btn-danger"
+                  onClick={() => {
+                    clearFirebaseConfig();
+                    setFirebaseActive(false);
+                    setFirebaseStatusMsg('Firebase disconnected. Falling back to local/serverless API.');
+                    setTimeout(() => {
+                      setFirebaseStatusMsg('');
+                    }, 2000);
+                  }}
+                >
+                  Disconnect
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setShowFirebaseModal(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="modal-help">
+              <small>
+                Tip: You can also define <code>VITE_FIREBASE_PROJECT_ID</code> and <code>VITE_FIREBASE_API_KEY</code> in your <code>.env</code> file.
+              </small>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
