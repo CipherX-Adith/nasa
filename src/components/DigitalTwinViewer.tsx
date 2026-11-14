@@ -125,17 +125,14 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
   };
 
   const active = organData[selectedOrgan];
-  const signalCount = Object.values(vitals).filter((value) => Number.isFinite(value)).length;
-  const systemCards: OrganKey[] = ['heart', 'lungs', 'muscles', 'brain'];
 
   return (
     <div className="digital-twin-card">
       <div className="digital-twin-head">
         <div>
-          <div className="digital-twin-badge">INTERACTIVE ANATOMY · SIMULATED MODEL</div>
-          <h3 className="digital-twin-title">Mission health map</h3>
+          <h3 className="digital-twin-title">Your Digital Twin Overview</h3>
           <p className="digital-twin-subtitle">
-            Select a highlighted system to review its available measurements. This illustration is not a diagnostic model.
+            A personalized model uses your medical history, imaging, and real-time data to simulate and predict heart function.
           </p>
         </div>
         <button
@@ -146,34 +143,6 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
           View all data
         </button>
       </div>
-
-      <div className="twin-anatomy-layout">
-        <div className="twin-system-list" aria-label="Health systems">
-          {systemCards.map((key) => {
-            const item = organData[key];
-            const Icon = item.icon;
-            return (
-              <button
-                key={key}
-                type="button"
-                className={`twin-system-card ${selectedOrgan === key ? 'active' : ''}`}
-                onClick={() => onSelectOrgan(key)}
-                style={{ '--system-color': item.color, '--system-bg': item.bg } as React.CSSProperties}
-              >
-                <span className="twin-system-icon"><Icon size={16} /></span>
-                <span className="twin-system-copy">
-                  <strong>{key === 'brain' ? 'Mental' : key === 'muscles' ? 'Muscles' : key === 'heart' ? 'Heart' : 'Lungs'}</strong>
-                  <small>{item.value}</small>
-                  <em>{item.status}</em>
-                </span>
-              </button>
-            );
-          })}
-          <div className="twin-signal-coverage">
-            <span className="coverage-ring" aria-hidden="true">{signalCount}<small>/10</small></span>
-            <span><strong>Signals present</strong><small>Available measurements</small></span>
-          </div>
-        </div>
 
       {/* Anatomical Holographic Body Container */}
       <div className="anatomical-viewport">
@@ -210,23 +179,16 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
 
               {/* Shading gradients for 3D body volume */}
               <linearGradient id="body-glass-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#8be9ff" stopOpacity="0.96" />
-                <stop offset="26%" stopColor="#388bff" stopOpacity="0.9" />
-                <stop offset="58%" stopColor="#2949c9" stopOpacity="0.82" />
-                <stop offset="100%" stopColor="#172554" stopOpacity="0.72" />
+                <stop offset="0%" stopColor="rgba(215, 235, 250, 0.85)" />
+                <stop offset="50%" stopColor="rgba(180, 210, 235, 0.65)" />
+                <stop offset="100%" stopColor="rgba(145, 185, 220, 0.5)" />
               </linearGradient>
 
               <linearGradient id="body-contour-stroke" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#e0fbff" />
-                <stop offset="38%" stopColor="#38bdf8" />
-                <stop offset="72%" stopColor="#818cf8" />
-                <stop offset="100%" stopColor="#67e8f9" />
-              </linearGradient>
-
-              <linearGradient id="muscle-shade-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#c4b5fd" stopOpacity="0.56" />
-                <stop offset="48%" stopColor="#60a5fa" stopOpacity="0.24" />
-                <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.04" />
+                <stop offset="0%" stopColor="rgba(255, 255, 255, 0.95)" />
+                <stop offset="35%" stopColor="rgba(56, 189, 248, 0.7)" />
+                <stop offset="70%" stopColor="rgba(13, 148, 136, 0.5)" />
+                <stop offset="100%" stopColor="rgba(255, 255, 255, 0.8)" />
               </linearGradient>
 
               {/* Internal organs gradients */}
@@ -319,24 +281,6 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
                 strokeWidth="1.6"
                 filter="drop-shadow(0 10px 18px rgba(10, 40, 80, 0.08))"
               />
-
-              {/* Soft muscle contours add the luminous anatomical depth shown in the reference. */}
-              <g className="body-muscle-highlights" fill="url(#muscle-shade-grad)" stroke="#bfdbfe" strokeOpacity="0.3" strokeWidth="1.1">
-                <path d="M 176,126 C 160,128 145,140 136,155 C 147,164 164,166 183,158 L 188,146 Z" />
-                <path d="M 204,126 C 220,128 235,140 244,155 C 233,164 216,166 197,158 L 192,146 Z" />
-                <path d="M 182,164 C 166,160 148,166 139,178 C 147,190 164,195 184,190 Z" />
-                <path d="M 198,164 C 214,160 232,166 241,178 C 233,190 216,195 196,190 Z" />
-                <path d="M 184,202 C 169,198 153,204 148,216 C 157,225 171,228 186,224 Z" />
-                <path d="M 196,202 C 211,198 227,204 232,216 C 223,225 209,228 194,224 Z" />
-                <path d="M 186,232 C 174,228 163,233 162,244 C 170,251 178,252 187,249 Z" />
-                <path d="M 194,232 C 206,228 217,233 218,244 C 210,251 202,252 193,249 Z" />
-                <path d="M 114,174 C 104,195 99,222 94,246 C 100,251 108,248 112,239 L 126,189 Z" />
-                <path d="M 266,174 C 276,195 281,222 286,246 C 280,251 272,248 268,239 L 254,189 Z" />
-                <path d="M 149,390 C 143,425 149,461 158,484 C 164,489 171,486 174,478 L 183,394 Z" />
-                <path d="M 231,390 C 237,425 231,461 222,484 C 216,489 209,486 206,478 L 197,394 Z" />
-                <path d="M 153,501 C 150,531 151,558 153,580 C 159,587 166,585 169,578 L 172,502 Z" />
-                <path d="M 227,501 C 230,531 229,558 227,580 C 221,587 214,585 211,578 L 208,502 Z" />
-              </g>
 
               {/* SKELETAL SYSTEM: Clavicles, Sternum, Ribcage, Spine, Pelvis, and Long Bones */}
               <g className="anatomical-skeleton-group" fill="none">
@@ -637,6 +581,28 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
             </g>
           </svg>
 
+          {/* ClyHealth Heart Floating Badge: 72% */}
+          <div
+            className={`cly-hotspot-pill heart-cly-pill ${selectedOrgan === 'heart' ? 'active' : ''}`}
+            style={{ top: '34%', left: '58%' }}
+            onClick={() => onSelectOrgan('heart')}
+            title="Cardiovascular System (Click to inspect)"
+          >
+            <span className="cly-pill-dot orange-dot" />
+            <span className="cly-pill-num">72%</span>
+          </div>
+
+          {/* ClyHealth Liver/Abdomen Floating Badge: 15% */}
+          <div
+            className={`cly-hotspot-pill liver-cly-pill ${selectedOrgan === 'immune' ? 'active' : ''}`}
+            style={{ top: '44%', left: '28%' }}
+            onClick={() => onSelectOrgan('immune')}
+            title="Metabolic & Hepatic System (Click to inspect)"
+          >
+            <span className="cly-pill-dot blue-dot" />
+            <span className="cly-pill-num">15%</span>
+          </div>
+
           {/* Floating Zoom & Fit Controls (Bottom Left) */}
           <div className="cly-floating-controls-left">
             <button
@@ -665,8 +631,16 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
             </button>
           </div>
 
+          {/* Floating AI Simulation Sparkle Button (Bottom Right) */}
+          <button
+            type="button"
+            className="cly-floating-sparkle-btn"
+            onClick={() => onSelectOrgan('heart')}
+            title="AI Physiological Twin Analysis"
+          >
+            <Sparkles size={18} className="sparkle-glow-icon" />
+          </button>
         </div>
-      </div>
       </div>
 
       {/* Active Organ Insight Panel */}
