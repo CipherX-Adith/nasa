@@ -52,6 +52,8 @@ class Followup(BaseModel): note:str=Field(min_length=1,max_length=2000)
 class Ask(BaseModel): question:str=Field(min_length=1,max_length=2000); astronaut_id:int|None=None
 class MeasurementIn(BaseModel): domain:str; metric:str; value:float; unit:str; timestamp:datetime|None=None; source:str="Manual entry"; quality:str="good"
 
+@app.get("/")
+@app.get("/api")
 @app.get("/api/health")
 def health(): return {"status":"ok","app":"ORBITCARE AI"}
 @app.post("/api/auth/login")

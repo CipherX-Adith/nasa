@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt<4.1
+python-multipart
+pymupdf
+numpy
+google-generativeai
+httpx
