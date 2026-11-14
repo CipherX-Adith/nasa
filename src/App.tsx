@@ -773,17 +773,47 @@ export default function App() {
       <main className="main">
         <header className="topbar">
           <div className="crumb">
-            ASTERIA-7 <span>/</span> {isAdmin ? 'CREW INTELLIGENCE' : 'PERSONAL TELEMETRY'}
+            ASTERIA-7 <span>/</span> {isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'} <span>/</span> {tab.toUpperCase()}
           </div>
           <div className="top-right">
-            {/* Prominent Dashboard Mode Indicator */}
+            {/* Astronaut Selector in Topbar for Admin (Medical Officer) */}
+            {isAdmin && (
+              <div className="topbar-crew-select" title="Switch monitored crew member">
+                <Users size={14} className="topbar-crew-icon" />
+                <span className="topbar-select-label">Crew:</span>
+                <select
+                  value={selected || ''}
+                  onChange={(e) => setSelected(+e.target.value)}
+                >
+                  {astronauts.map((a: Any) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} ({a.call_sign})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={13} />
+              </div>
+            )}
+
+            {/* Astronaut Badge in Topbar for User (Astronaut) */}
+            {isUser && (
+              <div className="topbar-user-badge" title="Active Astronaut Profile">
+                <span className="topbar-user-avatar">
+                  {astronaut?.call_sign?.slice(0, 2) || 'AS'}
+                </span>
+                <span className="topbar-user-name">{astronaut?.name}</span>
+                <span className="topbar-user-callsign">{astronaut?.call_sign}</span>
+              </div>
+            )}
+
+            {/* Dashboard Mode Indicator */}
             {isAdmin ? (
               <span className="role-pill admin">
-                <ShieldCheck size={13} /> Admin Console
+                <ShieldCheck size={13} /> Admin
               </span>
             ) : (
               <span className="role-pill user">
-                <UserCheck size={13} /> Astronaut Console
+                <UserCheck size={13} /> Astronaut
               </span>
             )}
 
@@ -801,134 +831,12 @@ export default function App() {
             </div>
 
             <div className="avatar small">
-              {isAdmin ? 'MO' : 'AS'}
+              {isAdmin ? 'MO' : (astronaut?.call_sign?.slice(0, 2) || 'AS')}
             </div>
           </div>
         </header>
 
         <div className="content">
-          <div className="heading-row">
-            <div>
-              <div className="eyebrow">
-                MISSION DAY 060 <span className="sep">·</span> LOW EARTH ORBIT <span className="sep">·</span>{' '}
-                {isAdmin ? 'FLIGHT SURGEON CONSOLE' : 'ASTRONAUT TELEMETRY'}
-              </div>
-              <h1>
-                {tab === 'Overview'
-                  ? isAdmin
-                    ? 'Crew Health Overview'
-                    : 'Personal Health Overview'
-                  : tab}
-                <span className={`role-tag ${isAdmin ? 'admin' : 'user'}`}>
-                  {isAdmin ? 'Admin Dashboard' : `User Dashboard (${astronaut?.name || 'Astronaut'})`}
-                </span>
-              </h1>
-              <p className="muted">
-                {isAdmin
-                  ? 'Comprehensive flight surgeon overview across Asteria-7 crew members, baselines, and alerts.'
-                  : `Personal health signals, baseline comparisons, and telemetry for ${astronaut?.name}.`}
-              </p>
-            </div>
-
-            {/* ASTRONAUT SELECTOR: ONLY visible for Admin / Medical Officer */}
-            {isAdmin ? (
-              <div className="selector">
-                <span>ASTRONAUT MONITORED</span>
-                <select
-                  value={selected || ''}
-                  onChange={(e) => setSelected(+e.target.value)}
-                >
-                  {astronauts.map((a: Any) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} · {a.call_sign}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={15} />
-              </div>
-            ) : (
-              /* USER DASHBOARD: Static Personal Badge Card with zero access to other crew */
-              <div className="personal-badge-card">
-                <span className="personal-badge-label">LOGGED IN CREW MEMBER</span>
-                <div className="personal-badge-name">
-                  <span className="personal-avatar">
-                    {astronaut?.call_sign?.slice(0, 2) || 'AS'}
-                  </span>
-                  <strong>{astronaut?.name || user?.username}</strong>
-                </div>
-                <div className="personal-badge-callsign">
-                  Call Sign: <b>{astronaut?.call_sign}</b> · Mission: <b>{astronaut?.mission || 'Asteria-7'}</b>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* STATS ROW: Customized between Admin & User */}
-          <div className="stats">
-            <div className="stat">
-              <div className="stat-top">
-                <span>{isAdmin ? 'CREW MONITORED' : 'MY HEALTH STATUS'}</span>
-                <Users size={17} />
-              </div>
-              <strong>
-                {isAdmin ? (
-                  <>
-                    {astronauts.length.toString().padStart(2, '0')}{' '}
-                    <small>astronauts</small>
-                  </>
-                ) : (
-                  <>
-                    ACTIVE <small>flight ready</small>
-                  </>
-                )}
-              </strong>
-              <div className="stat-foot">
-                <i /> {isAdmin ? 'All crew profiles monitored' : 'Vital telemetry operational'}
-              </div>
-            </div>
-
-            <div className="stat">
-              <div className="stat-top">
-                <span>{isAdmin ? 'OPEN ALERTS' : 'MY ACTIVE ALERTS'}</span>
-                <AlertTriangle size={17} />
-              </div>
-              <strong>
-                {alerts
-                  .filter((a: Any) => !a.acknowledged)
-                  .length.toString()
-                  .padStart(2, '0')}{' '}
-                <small>{isAdmin ? 'require review' : 'personal alerts'}</small>
-              </strong>
-              <div className="stat-foot amber">
-                {isAdmin ? 'Prioritized across crew' : 'Deterministic threshold check'}
-              </div>
-            </div>
-
-            <div className="stat">
-              <div className="stat-top">
-                <span>{isAdmin ? 'OBSERVATIONS' : 'MY BIOMETRICS'}</span>
-                <Activity size={17} />
-              </div>
-              <strong>
-                {measurements.length} <small>observations</small>
-              </strong>
-              <div className="stat-foot">
-                Across {metrics.length} tracked metrics
-              </div>
-            </div>
-
-            <div className="stat">
-              <div className="stat-top">
-                <span>MISSION</span>
-                <Atom size={17} />
-              </div>
-              <strong>
-                DAY 60 <small>of 180</small>
-              </strong>
-              <div className="stat-foot">ASTERIA-7 · Low Earth Orbit</div>
-            </div>
-          </div>
-
           {error && (
             <div className="error-banner">
               {error}
@@ -936,15 +844,95 @@ export default function App() {
             </div>
           )}
 
-          {/* DYNAMIC TELEMETRY CARD: Always featured when on Overview, Cardiovascular, or Behavioural */}
-          {(tab === 'Overview' ||
-            tab === 'Cardiovascular' ||
-            tab === 'Behavioural') &&
-            renderTelemetryCard()}
-
           {/* OVERVIEW TAB CONTENT */}
           {tab === 'Overview' && (
             <>
+              <div className="heading-row">
+                <div>
+                  <div className="eyebrow">
+                    MISSION DAY 060 <span className="sep">·</span> LOW EARTH ORBIT <span className="sep">·</span>{' '}
+                    {isAdmin ? 'FLIGHT SURGEON OVERVIEW' : 'ASTRONAUT TELEMETRY'}
+                  </div>
+                  <h1>
+                    {isAdmin ? 'Crew Health Overview' : 'Personal Health Overview'}
+                  </h1>
+                  <p className="muted">
+                    {isAdmin
+                      ? `Comprehensive flight surgeon overview, telemetry alerts, and baseline drift across Asteria-7 crew.`
+                      : `Personal health signals, baseline comparisons, and telemetry for ${astronaut?.name}.`}
+                  </p>
+                </div>
+              </div>
+
+              {/* STATS ROW: ONLY on Overview */}
+              <div className="stats">
+                <div className="stat">
+                  <div className="stat-top">
+                    <span>{isAdmin ? 'CREW MONITORED' : 'MY HEALTH STATUS'}</span>
+                    <Users size={17} />
+                  </div>
+                  <strong>
+                    {isAdmin ? (
+                      <>
+                        {astronauts.length.toString().padStart(2, '0')}{' '}
+                        <small>astronauts</small>
+                      </>
+                    ) : (
+                      <>
+                        ACTIVE <small>flight ready</small>
+                      </>
+                    )}
+                  </strong>
+                  <div className="stat-foot">
+                    <i /> {isAdmin ? `Active crew: ${astronaut?.name}` : 'Vital telemetry operational'}
+                  </div>
+                </div>
+
+                <div className="stat">
+                  <div className="stat-top">
+                    <span>{isAdmin ? 'OPEN ALERTS' : 'MY ACTIVE ALERTS'}</span>
+                    <AlertTriangle size={17} />
+                  </div>
+                  <strong>
+                    {alerts
+                      .filter((a: Any) => !a.acknowledged)
+                      .length.toString()
+                      .padStart(2, '0')}{' '}
+                    <small>{isAdmin ? 'require review' : 'personal alerts'}</small>
+                  </strong>
+                  <div className="stat-foot amber">
+                    {isAdmin ? 'Prioritized across crew' : 'Deterministic threshold check'}
+                  </div>
+                </div>
+
+                <div className="stat">
+                  <div className="stat-top">
+                    <span>{isAdmin ? 'OBSERVATIONS' : 'MY BIOMETRICS'}</span>
+                    <Activity size={17} />
+                  </div>
+                  <strong>
+                    {measurements.length} <small>observations</small>
+                  </strong>
+                  <div className="stat-foot">
+                    Across {metrics.length} tracked metrics
+                  </div>
+                </div>
+
+                <div className="stat">
+                  <div className="stat-top">
+                    <span>MISSION</span>
+                    <Atom size={17} />
+                  </div>
+                  <strong>
+                    DAY 60 <small>of 180</small>
+                  </strong>
+                  <div className="stat-foot">ASTERIA-7 · Low Earth Orbit</div>
+                </div>
+              </div>
+
+              {/* 60-Day Telemetry Trend Graph */}
+              {renderTelemetryCard()}
+
               <div className="grid-main">
                 <section className="panel alert-panel">
                   <div className="panel-head">
@@ -1221,293 +1209,379 @@ export default function App() {
 
           {/* CARDIOVASCULAR TAB CONTENT */}
           {tab === 'Cardiovascular' && (
-            <div className="grid-main" style={{ marginTop: '16px' }}>
-              <section className="panel" style={{ gridColumn: 'span 2' }}>
-                <div className="panel-head">
-                  <div>
-                    <div className="eyebrow">CARDIOVASCULAR PROFILE</div>
-                    <h2>
-                      {isAdmin
-                        ? `Hemodynamic Summary & Drift · ${astronaut?.name}`
-                        : 'My Hemodynamic Summary & Drift'}
-                    </h2>
+            <>
+              <div className="heading-row">
+                <div>
+                  <div className="eyebrow">
+                    HEMODYNAMICS & CARDIAC MONITORING <span className="sep">·</span>{' '}
+                    {isAdmin ? `CREW MEMBER: ${astronaut?.name} (${astronaut?.call_sign})` : 'PERSONAL TELEMETRY'}
                   </div>
+                  <h1>Cardiovascular Profile</h1>
+                  <p className="muted">
+                    {isAdmin
+                      ? `Continuous hemodynamic telemetry, baseline drift, and cardiac parameters for ${astronaut?.name}.`
+                      : 'Continuous hemodynamic telemetry, baseline drift, and cardiac parameters.'}
+                  </p>
                 </div>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '12px',
-                    marginTop: '16px',
-                  }}
-                >
-                  {[
-                    ['Resting heart rate', 'Heart Rate', 'bpm'],
-                    ['HRV', 'HRV', 'ms'],
-                    ['Systolic BP', 'Systolic BP', 'mmHg'],
-                  ].map(([mName, pillName, u]) => {
-                    const lat = latest(mName);
-                    const base = baseline(mName);
-                    return (
-                      <div
-                        key={mName}
-                        className={`domain ${selectedMetric === pillName ? 'active' : ''}`}
-                        onClick={() => setSelectedMetric(pillName)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <div className="domain-name">{pillName}</div>
-                        <div className="domain-value">
-                          {lat?.value ?? '--'} <small>{u}</small>
+              </div>
+
+              {/* Cardiovascular Telemetry Trend */}
+              {renderTelemetryCard()}
+
+              <div className="grid-main" style={{ marginTop: '16px' }}>
+                <section className="panel" style={{ gridColumn: 'span 2' }}>
+                  <div className="panel-head">
+                    <div>
+                      <div className="eyebrow">CARDIOVASCULAR PROFILE</div>
+                      <h2>
+                        {isAdmin
+                          ? `Hemodynamic Summary & Drift · ${astronaut?.name}`
+                          : 'My Hemodynamic Summary & Drift'}
+                      </h2>
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '12px',
+                      marginTop: '16px',
+                    }}
+                  >
+                    {[
+                      ['Resting heart rate', 'Heart Rate', 'bpm'],
+                      ['HRV', 'HRV', 'ms'],
+                      ['Systolic BP', 'Systolic BP', 'mmHg'],
+                    ].map(([mName, pillName, u]) => {
+                      const lat = latest(mName);
+                      const base = baseline(mName);
+                      return (
+                        <div
+                          key={mName}
+                          className={`domain ${selectedMetric === pillName ? 'active' : ''}`}
+                          onClick={() => setSelectedMetric(pillName)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <div className="domain-name">{pillName}</div>
+                          <div className="domain-value">
+                            {lat?.value ?? '--'} <small>{u}</small>
+                          </div>
+                          <div className="domain-base">
+                            Median: {base?.available ? `${base.median} ${u}` : 'building'}
+                          </div>
                         </div>
-                        <div className="domain-base">
-                          Median: {base?.available ? `${base.median} ${u}` : 'building'}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              </div>
+            </>
           )}
 
           {/* BEHAVIOURAL TAB CONTENT */}
           {tab === 'Behavioural' && (
-            <section className="panel table-panel" style={{ marginTop: '16px' }}>
-              <div className="panel-head">
+            <>
+              <div className="heading-row">
                 <div>
-                  <div className="eyebrow">ASTRONAUT SELF-REPORT</div>
-                  <h2>
-                    {isAdmin
-                      ? `Daily health assessment · ${astronaut?.name}`
-                      : 'Log daily health assessment'}
-                  </h2>
+                  <div className="eyebrow">
+                    NEUROCOGNITIVE & OPERATIONAL READINESS <span className="sep">·</span>{' '}
+                    {isAdmin ? `CREW MEMBER: ${astronaut?.name} (${astronaut?.call_sign})` : 'DAILY LOGS'}
+                  </div>
+                  <h1>Behavioural & Neurocognitive Assessment</h1>
                   <p className="muted">
-                    Manual assessment values are self-reported, not instrument
-                    measurements.
+                    {isAdmin
+                      ? `Review daily self-reported cognitive load, fatigue, sleep quality, and psychological adaptation for ${astronaut?.name}.`
+                      : 'Log and monitor your daily sleep quality, stress levels, cognitive load, and fatigue.'}
                   </p>
                 </div>
               </div>
-              <div className="assessment-form">
-                {[
-                  ['sleep_hours', 'Sleep duration (hours)', 0, 24],
-                  ['sleep_quality', 'Sleep quality (1–10)', 1, 10],
-                  ['stress', 'Stress (1–10)', 1, 10],
-                  ['mood', 'Mood (1–10)', 1, 10],
-                  ['fatigue', 'Fatigue (1–10)', 1, 10],
-                ].map(([k, label, min, max]: any) => (
-                  <label key={k}>
-                    {label}
+
+              <section className="panel table-panel">
+                <div className="panel-head">
+                  <div>
+                    <div className="eyebrow">ASTRONAUT SELF-REPORT</div>
+                    <h2>
+                      {isAdmin
+                        ? `Daily health assessment · ${astronaut?.name}`
+                        : 'Log daily health assessment'}
+                    </h2>
+                    <p className="muted">
+                      Manual assessment values are self-reported, not instrument
+                      measurements.
+                    </p>
+                  </div>
+                </div>
+                <div className="assessment-form">
+                  {[
+                    ['sleep_hours', 'Sleep duration (hours)', 0, 24],
+                    ['sleep_quality', 'Sleep quality (1–10)', 1, 10],
+                    ['stress', 'Stress (1–10)', 1, 10],
+                    ['mood', 'Mood (1–10)', 1, 10],
+                    ['fatigue', 'Fatigue (1–10)', 1, 10],
+                  ].map(([k, label, min, max]: any) => (
+                    <label key={k}>
+                      {label}
+                      <input
+                        type="number"
+                        min={min}
+                        max={max}
+                        step={k === 'sleep_hours' ? 0.5 : 1}
+                        value={(assessment as any)[k]}
+                        onChange={(e) =>
+                          setAssessment({
+                            ...assessment,
+                            [k]: +e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
+                  <label className="wide">
+                    Symptoms
                     <input
-                      type="number"
-                      min={min}
-                      max={max}
-                      step={k === 'sleep_hours' ? 0.5 : 1}
-                      value={(assessment as any)[k]}
+                      value={assessment.symptoms}
                       onChange={(e) =>
                         setAssessment({
                           ...assessment,
-                          [k]: +e.target.value,
+                          symptoms: e.target.value,
                         })
                       }
                     />
                   </label>
-                ))}
-                <label className="wide">
-                  Symptoms
-                  <input
-                    value={assessment.symptoms}
-                    onChange={(e) =>
-                      setAssessment({
-                        ...assessment,
-                        symptoms: e.target.value,
-                      })
-                    }
-                  />
-                </label>
-                <button
-                  onClick={async () => {
-                    if (selected) {
-                      await api(`/astronauts/${selected}/assessments`, {
-                        method: 'POST',
-                        body: JSON.stringify(assessment),
-                      });
-                      load();
-                    }
-                  }}
-                >
-                  <Plus size={15} /> Submit assessment
-                </button>
-              </div>
-            </section>
+                  <button
+                    onClick={async () => {
+                      if (selected) {
+                        await api(`/astronauts/${selected}/assessments`, {
+                          method: 'POST',
+                          body: JSON.stringify(assessment),
+                        });
+                        load();
+                      }
+                    }}
+                  >
+                    <Plus size={15} /> Submit assessment
+                  </button>
+                </div>
+              </section>
+            </>
           )}
 
           {/* MISSION TIMELINE TAB CONTENT */}
           {tab === 'Mission timeline' && (
-            <section className="panel full-timeline">
-              <div className="panel-head">
+            <>
+              <div className="heading-row">
                 <div>
-                  <div className="eyebrow">CHRONOLOGICAL RECORD</div>
-                  <h2>{astronaut?.name} · Mission events</h2>
-                </div>
-                <span className="simulated-tag">SIMULATED DEMO</span>
-              </div>
-              {timeline.slice(0, 60).map((x: Any) => (
-                <div className="timeline-row" key={x.id}>
-                  <time>{fmt(x.timestamp)}</time>
-                  <span className={'type-pill ' + x.type}>{x.type}</span>
-                  <div>
-                    <b>{x.title}</b>
-                    <p>{x.detail}</p>
+                  <div className="eyebrow">
+                    FLIGHT CHRONOLOGY & PHYSIOLOGICAL EVENTS <span className="sep">·</span>{' '}
+                    {isAdmin ? `CREW MEMBER: ${astronaut?.name}` : 'PERSONAL TIMELINE'}
                   </div>
+                  <h1>Mission Timeline</h1>
+                  <p className="muted">
+                    {isAdmin
+                      ? `Chronological operational milestones, EVAs, sleep shifts, and health events for ${astronaut?.name}.`
+                      : 'Chronological operational milestones, docking events, EVAs, and health markers.'}
+                  </p>
                 </div>
-              ))}
-            </section>
+              </div>
+
+              <section className="panel full-timeline">
+                <div className="panel-head">
+                  <div>
+                    <div className="eyebrow">CHRONOLOGICAL RECORD</div>
+                    <h2>{astronaut?.name} · Mission events</h2>
+                  </div>
+                  <span className="simulated-tag">SIMULATED DEMO</span>
+                </div>
+                {timeline.slice(0, 60).map((x: Any) => (
+                  <div className="timeline-row" key={x.id}>
+                    <time>{fmt(x.timestamp)}</time>
+                    <span className={'type-pill ' + x.type}>{x.type}</span>
+                    <div>
+                      <b>{x.title}</b>
+                      <p>{x.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </section>
+            </>
           )}
 
           {/* MEDICAL RECORDS TAB CONTENT */}
           {tab === 'Medical records' && (
-            <section className="panel table-panel">
-              <div className="panel-head">
+            <>
+              <div className="heading-row">
                 <div>
-                  <div className="eyebrow">DOCUMENT INTELLIGENCE</div>
-                  <h2>
-                    {isAdmin
-                      ? `Medical reports · ${astronaut?.name}`
-                      : 'My medical reports'}
-                  </h2>
+                  <div className="eyebrow">
+                    CLINICAL REPOSITORY & LAB REPORTS <span className="sep">·</span>{' '}
+                    {isAdmin ? `CREW MEMBER: ${astronaut?.name}` : 'MEDICAL FILES'}
+                  </div>
+                  <h1>Medical Records</h1>
                   <p className="muted">
                     {isAdmin
-                      ? 'Upload clinical PDFs and verify extracted text for crew medical files.'
-                      : 'Extracted clinical text remains unverified until reviewed by a medical officer.'}
+                      ? `Clinical documents, PDF report extraction, and flight surgeon verification for ${astronaut?.name}.`
+                      : 'In-flight medical summaries and verified clinical documents.'}
                   </p>
                 </div>
-
-                {/* Upload only available for Medical Officers / Admins */}
-                {isAdmin && (
-                  <label className="upload-btn">
-                    <Upload size={15} /> Upload PDF
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      hidden
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0];
-                        if (f && selected) {
-                          const fd = new FormData();
-                          fd.append('file', f);
-                          await api(`/astronauts/${selected}/documents`, {
-                            method: 'POST',
-                            body: fd,
-                          });
-                          load();
-                        }
-                      }}
-                    />
-                  </label>
-                )}
               </div>
 
-              {docs.map((d: Any) => (
-                <div className="doc-card" key={d.id}>
-                  <FileText size={19} />
+              <section className="panel table-panel">
+                <div className="panel-head">
                   <div>
-                    <b>{d.filename}</b>
-                    <p>
-                      {d.verified
-                        ? 'Verified by medical officer'
-                        : 'Pending human review'}{' '}
-                      · extraction confidence {Math.round(d.confidence * 100)}%
+                    <div className="eyebrow">DOCUMENT INTELLIGENCE</div>
+                    <h2>
+                      {isAdmin
+                        ? `Medical reports · ${astronaut?.name}`
+                        : 'My medical reports'}
+                    </h2>
+                    <p className="muted">
+                      {isAdmin
+                        ? 'Upload clinical PDFs and verify extracted text for crew medical files.'
+                        : 'Extracted clinical text remains unverified until reviewed by a medical officer.'}
                     </p>
-                    <pre>{d.extracted_text}</pre>
                   </div>
-                  {isAdmin && !d.verified && (
-                    <button
-                      className="ack"
-                      onClick={async () => {
-                        await api(`/documents/${d.id}/verify`, { method: 'POST' });
-                        load();
-                      }}
-                    >
-                      Verify
-                    </button>
+
+                  {/* Upload only available for Medical Officers / Admins */}
+                  {isAdmin && (
+                    <label className="upload-btn">
+                      <Upload size={15} /> Upload PDF
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        hidden
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (f && selected) {
+                            const fd = new FormData();
+                            fd.append('file', f);
+                            await api(`/astronauts/${selected}/documents`, {
+                              method: 'POST',
+                              body: fd,
+                            });
+                            load();
+                          }
+                        }}
+                      />
+                    </label>
                   )}
                 </div>
-              ))}
-              {!docs.length && (
-                <div className="empty">No reports uploaded for this astronaut.</div>
-              )}
-            </section>
+
+                {docs.map((d: Any) => (
+                  <div className="doc-card" key={d.id}>
+                    <FileText size={19} />
+                    <div>
+                      <b>{d.filename}</b>
+                      <p>
+                        {d.verified
+                          ? 'Verified by medical officer'
+                          : 'Pending human review'}{' '}
+                        · extraction confidence {Math.round(d.confidence * 100)}%
+                      </p>
+                      <pre>{d.extracted_text}</pre>
+                    </div>
+                    {isAdmin && !d.verified && (
+                      <button
+                        className="ack"
+                        onClick={async () => {
+                          await api(`/documents/${d.id}/verify`, { method: 'POST' });
+                          load();
+                        }}
+                      >
+                        Verify
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {!docs.length && (
+                  <div className="empty">No reports uploaded for this astronaut.</div>
+                )}
+              </section>
+            </>
           )}
 
           {/* AI ASSISTANT TAB CONTENT */}
           {tab === 'AI assistant' && (
-            <section className="panel assistant">
-              <div className="assistant-head">
-                <div className="assistant-icon">
-                  <Atom />
-                </div>
+            <>
+              <div className="heading-row">
                 <div>
                   <div className="eyebrow">
-                    {isAdmin
-                      ? 'FLIGHT SURGEON AI ASSISTANT'
-                      : 'CREW PERSONAL HEALTH ASSISTANT'}
+                    FLIGHT SURGEON AI DECISION SUPPORT <span className="sep">·</span>{' '}
+                    {isAdmin ? `TARGET: ${astronaut?.name}` : 'CREW ASSISTANT'}
                   </div>
-                  <h2>
-                    {isAdmin
-                      ? `Ask about ${astronaut?.name}'s health signals`
-                      : 'Ask about your mission health'}
-                  </h2>
-                  <p>
-                    Answers use available records. Interpretations are not
-                    diagnoses.
+                  <h1>Evidence-Grounded Assistant</h1>
+                  <p className="muted">
+                    Natural language queries grounded in mission telemetry, clinical guidelines, and flight logs.
                   </p>
                 </div>
               </div>
-              <div className="prompt-chips">
-                {[
-                  'Summarize recent health changes',
-                  'What evidence supports the open alerts?',
-                  'How has sleep changed from baseline?',
-                ].map((x) => (
-                  <button key={x} onClick={() => setQuestion(x)}>
-                    {x}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask about available measurements, trends, alerts, or mission events…"
-              />
-              <button
-                className="ask-btn"
-                disabled={!question.trim() || busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    const r = await api('/assistant/ask', {
-                      method: 'POST',
-                      body: JSON.stringify({ question, astronaut_id: selected }),
-                    });
-                    setAnswer(
-                      `${r.mode}\n\n${r.answer}\n\nEvidence retrieved:\n${r.evidence}`
-                    );
-                  } catch (e: any) {
-                    setError(e.message);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {busy ? 'Retrieving evidence…' : 'Ask assistant'} <span>→</span>
-              </button>
-              {answer && <pre className="answer">{answer}</pre>}
-              <div className="notice">
-                <ShieldCheck size={16} /> The assistant explains recorded
-                evidence; it does not diagnose, recommend treatment, or
-                determine alert priority.
-              </div>
-            </section>
+
+              <section className="panel assistant">
+                <div className="assistant-head">
+                  <div className="assistant-icon">
+                    <Atom />
+                  </div>
+                  <div>
+                    <div className="eyebrow">
+                      {isAdmin
+                        ? 'FLIGHT SURGEON AI ASSISTANT'
+                        : 'CREW PERSONAL HEALTH ASSISTANT'}
+                    </div>
+                    <h2>
+                      {isAdmin
+                        ? `Ask about ${astronaut?.name}'s health signals`
+                        : 'Ask about your mission health'}
+                    </h2>
+                    <p>
+                      Answers use available records. Interpretations are not
+                      diagnoses.
+                    </p>
+                  </div>
+                </div>
+                <div className="prompt-chips">
+                  {[
+                    'Summarize recent health changes',
+                    'What evidence supports the open alerts?',
+                    'How has sleep changed from baseline?',
+                  ].map((x) => (
+                    <button key={x} onClick={() => setQuestion(x)}>
+                      {x}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  placeholder="Ask about available measurements, trends, alerts, or mission events…"
+                />
+                <button
+                  className="ask-btn"
+                  disabled={!question.trim() || busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      const r = await api('/assistant/ask', {
+                        method: 'POST',
+                        body: JSON.stringify({ question, astronaut_id: selected }),
+                      });
+                      setAnswer(
+                        `${r.mode}\n\n${r.answer}\n\nEvidence retrieved:\n${r.evidence}`
+                      );
+                    } catch (e: any) {
+                      setError(e.message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  {busy ? 'Retrieving evidence…' : 'Ask assistant'} <span>→</span>
+                </button>
+                {answer && <pre className="answer">{answer}</pre>}
+                <div className="notice">
+                  <ShieldCheck size={16} /> The assistant explains recorded
+                  evidence; it does not diagnose, recommend treatment, or
+                  determine alert priority.
+                </div>
+              </section>
+            </>
           )}
         </div>
       </main>

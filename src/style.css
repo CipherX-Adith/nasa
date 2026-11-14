@@ -489,6 +489,98 @@ button {
   pointer-events: none;
 }
 
+/* Topbar Crew Selector (Admin) */
+.topbar-crew-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  padding: 5px 12px;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all .15s ease;
+}
+
+.topbar-crew-select:hover {
+  border-color: var(--primary-border);
+  background: var(--primary-bg);
+}
+
+.topbar-crew-icon {
+  color: var(--primary-accent);
+  flex-shrink: 0;
+}
+
+.topbar-select-label {
+  font: 600 9px 'DM Mono', monospace;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.topbar-crew-select select {
+  background: transparent;
+  border: 0;
+  color: var(--text-heading);
+  font: 600 12px Manrope, sans-serif;
+  outline: 0;
+  cursor: pointer;
+  padding-right: 18px;
+  appearance: none;
+}
+
+.topbar-crew-select select option {
+  background: var(--bg-panel);
+  color: var(--text-heading);
+}
+
+.topbar-crew-select svg:last-child {
+  position: absolute;
+  right: 9px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Topbar User Badge (Astronaut) */
+.topbar-user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  padding: 4px 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.topbar-user-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary-bg);
+  border: 1px solid var(--primary-border);
+  color: var(--primary-accent);
+  display: inline-grid;
+  place-items: center;
+  font: 700 8.5px 'DM Mono', monospace;
+}
+
+.topbar-user-name {
+  font: 600 12px Manrope, sans-serif;
+  color: var(--text-heading);
+}
+
+.topbar-user-callsign {
+  font: 500 10px 'DM Mono', monospace;
+  color: var(--primary-accent);
+  background: var(--primary-bg);
+  border: 1px solid var(--primary-border);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
 /* Role badges & tags */
 .role-tag {
   display: inline-flex;
