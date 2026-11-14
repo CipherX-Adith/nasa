@@ -303,13 +303,13 @@ def ensure_seed_users(db: Session):
                 status="approved",
             ))
         else:
-            if not verify_password("orbitcare-demo", user_row.password_hash):
-                user_row.password_hash = hash_password("orbitcare-demo")
-            user_row.status = "approved"
+            # Preserve existing accounts. Re-hashing every demo account during a
+            # serverless cold start adds several seconds before /auth/login can
+            # respond, which can make astronaut sign-in appear to time out.
+            continue
     db.commit()
 
 with next(get_db()) as db:
-    sync_from_firebase(db)
     if db.query(Astronaut).count() == 0:
         seed(db)
     ensure_seed_astronauts(db)

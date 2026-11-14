@@ -6073,6 +6073,71 @@ textarea {
   height: 202px;
   left: 42%;
   top: 27%;
+  z-index: 1;
+  animation: orbitcare-planet-float 7s ease-in-out infinite;
+  will-change: transform, box-shadow;
+}
+
+.planet::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(86, 222, 202, .25), transparent 66%);
+  filter: blur(9px);
+  animation: orbitcare-planet-glow 4.5s ease-in-out infinite;
+}
+
+.orbit {
+  z-index: 0;
+  transform-origin: center;
+  animation: orbitcare-ring-one 22s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.orbit-two {
+  transform-origin: center;
+  animation: orbitcare-ring-two 27s ease-in-out infinite alternate;
+}
+
+.art-copy {
+  z-index: 2;
+}
+
+@keyframes orbitcare-planet-float {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    box-shadow: 0 0 82px rgba(77, 201, 172, .24), inset -20px -12px 30px #081729;
+  }
+  50% {
+    transform: translate3d(10px, -11px, 0) scale(1.025);
+    box-shadow: 0 0 112px rgba(77, 201, 172, .38), inset -20px -12px 30px #081729;
+  }
+}
+
+@keyframes orbitcare-planet-glow {
+  0%, 100% { opacity: .55; transform: scale(.94); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@keyframes orbitcare-ring-one {
+  0% { transform: rotate(-35deg) scale(1); opacity: .7; }
+  100% { transform: rotate(-24deg) scale(1.035); opacity: 1; }
+}
+
+@keyframes orbitcare-ring-two {
+  0% { transform: rotate(28deg) scale(1); opacity: .8; }
+  100% { transform: rotate(17deg) scale(1.03); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planet,
+  .planet::after,
+  .orbit,
+  .orbit-two {
+    animation: none;
+  }
 }
 
 .art-copy span {

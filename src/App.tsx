@@ -402,9 +402,10 @@ export default function App() {
     const enteredPass = passwordInput.trim();
 
     try {
-      // 1. Try Backend API login with 6-second timeout
+      // A serverless deployment may need a short cold-start window before it
+      // can initialize the demo mission database.
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
 
       try {
         const d = await api('/auth/login', {
@@ -436,7 +437,7 @@ export default function App() {
       }
     } catch (x: any) {
       const msg = x.name === 'AbortError'
-        ? 'Verification timed out. Reconnecting…'
+        ? 'Mission control took too long to respond. Please try again.'
         : (x.name === 'TypeError' && x.message?.includes('fetch')
             ? 'Unable to connect to mission control server. Ensure backend is running.'
             : (x.message || 'Login failed'));
