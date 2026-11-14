@@ -8,7 +8,13 @@ from pydantic import BaseModel, Field
 from .db import Base, engine, get_db
 from .models import User, Astronaut, Measurement, Alert, Assessment, MedicalRecord, MedicalDocument, MedicalObservation
 from .core import verify_password, hash_password, make_token, read_token
-from .intelligence import baseline, detect
+from .intelligence import (
+    baseline,
+    detect,
+    analyze_crew_health,
+    generate_daily_health_report,
+    generate_hourly_telemetry
+)
 
 app = FastAPI(title="ORBITCARE", version="1.0.0")
 app.add_middleware(
@@ -252,16 +258,28 @@ def serialize(row):
     return {c.name: getattr(row, c.name) for c in row.__table__.columns}
 
 def refresh_alerts(db: Session):
-    existing = {a.measurement_id for a in db.query(Alert).all()}
+    existing_meas_ids = {a.measurement_id for a in db.query(Alert).all() if a.measurement_id is not None}
+    active_unacked = {(a.astronaut_id, a.metric) for a in db.query(Alert).filter_by(acknowledged=False).all()}
+    
     for item in detect(db.query(Measurement).order_by(Measurement.timestamp).all()):
-        if item["measurement_id"] not in existing:
-            db.add(Alert(
-                astronaut_id=item["astronaut_id"],
-                measurement_id=item["measurement_id"],
-                metric=item["metric"],
-                priority=item["priority"],
-                reason=item["reason"]
-            ))
+        meas_id = item["measurement_id"]
+        pair = (item["astronaut_id"], item["metric"])
+        
+        # Don't re-add if measurement already triggered an alert or if an unacknowledged alert for this metric exists
+        if (meas_id is not None and meas_id in existing_meas_ids) or pair in active_unacked:
+            continue
+            
+        alert = Alert(
+            astronaut_id=item["astronaut_id"],
+            measurement_id=meas_id,
+            metric=item["metric"],
+            priority=item["priority"],
+            reason=item["reason"]
+        )
+        db.add(alert)
+        if meas_id is not None:
+            existing_meas_ids.add(meas_id)
+        active_unacked.add(pair)
     db.commit()
 
 def seed_new_astronaut_baseline(db: Session, aid: int):
@@ -714,6 +732,90 @@ def baselines(aid: int, db: Session = Depends(get_db), user = Depends(current_us
     for r in rows:
         groups.setdefault((r.metric, r.unit, r.domain), []).append(r)
     return [{"metric": m, "unit": u, "domain": d, **baseline([x.value for x in rs])} for (m, u, d), rs in groups.items()]
+
+@app.get("/api/astronauts/{aid}/telemetry/hourly")
+def hourly_telemetry(aid: int, metric: str = "Resting heart rate", day: int = 60, db: Session = Depends(get_db), user = Depends(current_user)):
+    allowed(user, aid)
+    astro = db.get(Astronaut, aid)
+    if not astro:
+        raise HTTPException(404, "Astronaut not found")
+    return generate_hourly_telemetry(aid=aid, metric=metric, day=day)
+
+@app.get("/api/astronauts/{aid}/reports/daily")
+def get_daily_health_report(aid: int, day: int = 60, db: Session = Depends(get_db), user = Depends(current_user)):
+    allowed(user, aid)
+    astro = db.get(Astronaut, aid)
+    if not astro:
+        raise HTTPException(404, "Astronaut not found")
+    meas = db.query(Measurement).filter_by(astronaut_id=aid).order_by(Measurement.timestamp).all()
+    ass = db.query(Assessment).filter_by(astronaut_id=aid).order_by(Assessment.timestamp).all()
+    return generate_daily_health_report(astro, meas, ass, mission_day=day)
+
+@app.post("/api/astronauts/{aid}/reports/daily/generate")
+def create_daily_health_report(aid: int, day: int = 60, db: Session = Depends(get_db), user = Depends(current_user)):
+    allowed(user, aid)
+    astro = db.get(Astronaut, aid)
+    if not astro:
+        raise HTTPException(404, "Astronaut not found")
+    meas = db.query(Measurement).filter_by(astronaut_id=aid).order_by(Measurement.timestamp).all()
+    ass = db.query(Assessment).filter_by(astronaut_id=aid).order_by(Assessment.timestamp).all()
+    report = generate_daily_health_report(astro, meas, ass, mission_day=day)
+    
+    # Save as verified MedicalRecord in SQLite and Firebase
+    now_utc = datetime.now(timezone.utc)
+    rec = MedicalRecord(
+        astronaut_id=aid,
+        record_type="Clinical Evaluation",
+        title=f"Mission Day {day:03d} Clinical Health Assessment",
+        physician=report["physician"],
+        findings=report["executive_summary"] + " " + "; ".join(
+            [f"{b['title']}: {b['detail']}" for b in report["abnormal_behaviours"]]
+        ),
+        countermeasures="; ".join(report["countermeasures"]),
+        status="Signed & Verified",
+        date=now_utc.strftime("%Y-%m-%d"),
+        timestamp=now_utc
+    )
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+
+    # Sync to Firebase RTDB
+    fb_request(f"medical_records/{aid}/{rec.id}", {
+        "id": rec.id,
+        "astronaut_id": rec.astronaut_id,
+        "record_type": rec.record_type,
+        "title": rec.title,
+        "physician": rec.physician,
+        "findings": rec.findings,
+        "countermeasures": rec.countermeasures,
+        "status": rec.status,
+        "date": rec.date,
+        "timestamp": rec.timestamp.isoformat(),
+    }, method="PUT")
+
+    return {
+        "report": report,
+        "medical_record_id": rec.id,
+        "message": f"Daily Clinical Report for {astro.name} (Day {day}) generated and saved to permanent medical records."
+    }
+
+@app.get("/api/astronauts/{aid}/warnings")
+def astronaut_warnings(aid: int, db: Session = Depends(get_db), user = Depends(current_user)):
+    allowed(user, aid)
+    astro = db.get(Astronaut, aid)
+    if not astro:
+        raise HTTPException(404, "Astronaut not found")
+    meas = db.query(Measurement).filter_by(astronaut_id=aid).order_by(Measurement.timestamp).all()
+    ass = db.query(Assessment).filter_by(astronaut_id=aid).order_by(Assessment.timestamp).all()
+    analysis = analyze_crew_health(meas, ass, astronaut=astro)
+    return {
+        "astronaut_id": aid,
+        "flight_readiness_score": analysis["flight_readiness_score"],
+        "overall_status": analysis["overall_status"],
+        "abnormal_behaviours": analysis["abnormal_behaviours"],
+        "recommendations": analysis["recommendations"]
+    }
 
 # ----------------- ASSESSMENTS & DAILY HEALTH DATA -----------------
 

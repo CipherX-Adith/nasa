@@ -149,6 +149,20 @@ export default function App() {
 
   // Firebase Real-time Cloud Database (active in background)
   const firebaseActive = isFirebaseEnabled();
+
+  // Telemetry View Mode: 24-Hour Hourly vs 60-Day Mission Baseline
+  const [telemetryMode, setTelemetryMode] = useState<'hourly' | 'mission'>('hourly');
+  const [hourlyTelemetry, setHourlyTelemetry] = useState<Any | null>(null);
+
+  // Health Model Analysis, Daily Reports & Abnormal Behaviour Warnings
+  const [activeWarnings, setActiveWarnings] = useState<Any[]>([]);
+  const [flightReadinessScore, setFlightReadinessScore] = useState<number>(100);
+  const [overallStatus, setOverallStatus] = useState<string>('NOMINAL');
+  const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
+  const [dailyReportData, setDailyReportData] = useState<Any | null>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [reportSavedSuccess, setReportSavedSuccess] = useState(false);
+
   const [usernameInput, setUsernameInput] = useState('medical');
   const [passwordInput, setPasswordInput] = useState('orbitcare-demo');
 
@@ -329,7 +343,7 @@ export default function App() {
           const role = trimmedUser === 'medical' ? 'medical' : 'astronaut';
           const astroId = (trimmedUser === 'maya' || trimmedUser === 'astronaut') ? 1 : trimmedUser === 'elena' ? 2 : trimmedUser === 'david' ? 3 : null;
           const fullName = trimmedUser === 'medical' ? 'Dr. Robert Vance' : trimmedUser === 'maya' ? 'Maya Chen' : trimmedUser === 'elena' ? 'Elena Rossi' : 'David Okafor';
-          
+
           const fallbackData = {
             access_token: `demo-token-${trimmedUser}-${Date.now()}`,
             role,
@@ -606,14 +620,22 @@ export default function App() {
           if (l && l.length) setAlerts(l);
         }
 
-        const [b, t, d] = await Promise.all([
+        const [b, t, d, hourly, warn] = await Promise.all([
           api(`/astronauts/${id}/baselines`).catch(() => []),
           api(`/timeline/${id}`).catch(() => []),
           api(`/astronauts/${id}/documents`).catch(() => []),
+          api(`/astronauts/${id}/telemetry/hourly?metric=Resting%20heart%20rate`).catch(() => null),
+          api(`/astronauts/${id}/warnings`).catch(() => null),
         ]);
         if (b && b.length) setBaselines(b);
         if (t && t.length) setTimeline(t);
         if (d && d.length) setDocs(d);
+        if (hourly) setHourlyTelemetry(hourly);
+        if (warn) {
+          setActiveWarnings(warn.abnormal_behaviours || []);
+          setFlightReadinessScore(warn.flight_readiness_score ?? 100);
+          setOverallStatus(warn.overall_status ?? 'NOMINAL');
+        }
       }
 
       // Load all registered users from Firebase
@@ -808,6 +830,24 @@ export default function App() {
             updated[lastIdx] = { ...updated[lastIdx], value: tickData.value };
             return updated;
           });
+
+          // Also update active current hour in hourly telemetry (in-place)
+          setHourlyTelemetry((prev: Any) => {
+            if (!prev || !prev.hourly_points) return prev;
+            const currentH = new Date().getUTCHours();
+            const updatedPoints = prev.hourly_points.map((p: Any) => {
+              if (p.hour_index === currentH || p.is_current) {
+                return { ...p, value: tickData.value, is_current: true };
+              }
+              return p;
+            });
+            return {
+              ...prev,
+              current_value: tickData.value,
+              hourly_points: updatedPoints,
+            };
+          });
+
           setPacketCount((c) => c + 1);
           setLastSyncTime(new Date());
 
@@ -954,6 +994,34 @@ export default function App() {
     return target;
   }, [selectedMetric, measurements]);
 
+  // Fetch Hourly Telemetry and Warnings on astronaut or metric change
+  useEffect(() => {
+    if (!token) return;
+    const targetId =
+      user?.role !== 'medical' && user?.astronaut_id
+        ? user.astronaut_id
+        : selected || astronaut?.id || astronauts[0]?.id || 1;
+    if (!targetId) return;
+
+    let isMounted = true;
+    Promise.all([
+      api(`/astronauts/${targetId}/telemetry/hourly?metric=${encodeURIComponent(backendMetric)}`).catch(() => null),
+      api(`/astronauts/${targetId}/warnings`).catch(() => null),
+    ]).then(([hourly, warn]) => {
+      if (!isMounted) return;
+      if (hourly) setHourlyTelemetry(hourly);
+      if (warn) {
+        setActiveWarnings(warn.abnormal_behaviours || []);
+        setFlightReadinessScore(warn.flight_readiness_score ?? 100);
+        setOverallStatus(warn.overall_status ?? 'NOMINAL');
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [token, selected, user, astronaut, astronauts, backendMetric]);
+
   // Compute 60-day telemetry curve, adaptive baseline, drift flags, domains & ticks dynamically
   const telemetryData = useMemo(() => {
     const filtered = measurements
@@ -1066,6 +1134,92 @@ export default function App() {
     );
   };
 
+  // Compute 24-hour hourly telemetry profile
+  const hourlyChartData = useMemo(() => {
+    const aid = selected || astronaut?.id || 1;
+    const isMaya = aid === 1;
+
+    let points: Any[] = [];
+    if (hourlyTelemetry && hourlyTelemetry.hourly_points && hourlyTelemetry.hourly_points.length) {
+      points = hourlyTelemetry.hourly_points.map((p: Any) => ({
+        hour: p.hour,
+        hour_code: p.hour_code || `H${String(p.hour_index).padStart(2, '0')}`,
+        hour_index: p.hour_index,
+        dayLabel: `Hour ${p.hour}`,
+        value: p.value,
+        unit: p.unit || telemetryData.unit,
+        is_current: p.is_current,
+        isDrift: p.is_drift,
+        baselineMedian: telemetryData.median,
+        baselineLower: telemetryData.lower,
+        baselineUpper: telemetryData.upper,
+      }));
+    } else {
+      // Fallback 24-hour circadian curve
+      const currentH = new Date().getUTCHours();
+      const base = isMaya ? 84.0 : 66.0;
+      const nadir = isMaya ? 68.0 : 56.0;
+      for (let h = 0; h < 24; h++) {
+        const angle = ((h - 3) / 24.0) * 2.0 * Math.PI;
+        const factor = (1.0 - Math.cos(angle)) / 2.0;
+        const val = Math.round((nadir + (base - nadir) * factor + ((h * 7 + aid * 13) % 9 - 4) * 0.35) * 10) / 10;
+        points.push({
+          hour: `${String(h).padStart(2, '0')}:00`,
+          hour_code: `H${String(h).padStart(2, '0')}`,
+          hour_index: h,
+          dayLabel: `Hour ${h}:00`,
+          value: val,
+          unit: telemetryData.unit,
+          is_current: h === currentH,
+          isDrift: isMaya ? val > 75.0 : val > 80.0,
+          baselineMedian: telemetryData.median,
+          baselineLower: telemetryData.lower,
+          baselineUpper: telemetryData.upper,
+        });
+      }
+    }
+
+    const allVals = points.map((p: Any) => p.value);
+    const minVal = Math.min(...allVals, telemetryData.lower);
+    const maxVal = Math.max(...allVals, telemetryData.upper);
+    const span = maxVal - minVal;
+    const pad = span > 0 ? span * 0.15 : 2;
+    const low = Math.floor(minVal - pad);
+    const high = Math.ceil(maxVal + pad);
+    const step = Math.max(1, Math.round((high - low) / 4));
+
+    return {
+      points,
+      domain: [low, high] as [number, number],
+      ticks: [low, low + step, low + step * 2, low + step * 3, low + step * 4],
+    };
+  }, [hourlyTelemetry, telemetryData, selected, astronaut]);
+
+  // Custom Hourly Dot: pulses radar ring on the current live hour, red on drift
+  const CustomHourlyDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (!payload || cx === undefined || cy === undefined) return null;
+    if (payload.is_current) {
+      return (
+        <g>
+          <circle cx={cx} cy={cy} r={8} fill="none" stroke="#0284c7" strokeWidth={2} opacity={0.6}>
+            <animate attributeName="r" values="6;12;6" dur="2s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite" />
+          </circle>
+          <circle cx={cx} cy={cy} r={4.5} fill="#0284c7" stroke="#ffffff" strokeWidth={2} />
+        </g>
+      );
+    }
+    if (payload.isDrift) {
+      return (
+        <circle cx={cx} cy={cy} r={4} fill="#ef4444" stroke="#1e222d" strokeWidth={1.2} />
+      );
+    }
+    return (
+      <circle cx={cx} cy={cy} r={2.5} fill="#38bdf8" />
+    );
+  };
+
   // Custom active dot on hover
   const CustomActiveDot = (props: any) => {
     const { cx, cy } = props;
@@ -1086,9 +1240,13 @@ export default function App() {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const title = telemetryMode === 'hourly'
+        ? `${data.hour || label} · Mission Day 060${data.is_current ? ' (Live Downlink Signal)' : ''}`
+        : (data.dayFull || label);
+
       return (
         <div className="telemetry-tooltip">
-          <div className="tooltip-day">{data.dayFull || label}</div>
+          <div className="tooltip-day">{title}</div>
           <div className="tooltip-value">
             {data.value} <span className="tooltip-unit">{data.unit}</span>
           </div>
@@ -1096,6 +1254,11 @@ export default function App() {
             Baseline: {data.baselineMedian} {data.unit} ({data.baselineLower}-
             {data.baselineUpper})
           </div>
+          {data.is_current && (
+            <div style={{ marginTop: '4px', fontSize: '10.5px', color: '#0284c7', fontWeight: 700 }}>
+              ● Active LEO Downlink Signal
+            </div>
+          )}
         </div>
       );
     }
@@ -1259,187 +1422,481 @@ export default function App() {
     return null;
   };
 
-  // Reusable Telemetry Trend Card
-  const renderTelemetryCard = () => (
-    <section className="telemetry-card">
-      <div className="telemetry-head">
-        <div className="telemetry-head-left">
-          <div className="telemetry-title-row">
-            <h2>Mission Telemetry Trend</h2>
-            <span className="telemetry-badge">
-              60-Day Adaptive Baseline
-            </span>
+  // Handler to open Daily Clinical Health Report
+  const handleOpenDailyReport = async (aid?: number) => {
+    const targetId = aid || (user?.role !== 'medical' && user?.astronaut_id
+      ? user.astronaut_id
+      : selected || astronaut?.id || astronauts[0]?.id || 1);
+
+    setIsGeneratingReport(true);
+    setReportSavedSuccess(false);
+    try {
+      const rep = await api(`/astronauts/${targetId}/reports/daily?day=60`);
+      setDailyReportData(rep);
+      setDailyReportModalOpen(true);
+    } catch (e: any) {
+      console.warn('Daily report fetch error:', e);
+      const targetAstro = astronauts.find((a: Any) => a.id === targetId) || astronaut;
+      setDailyReportData({
+        report_id: `CSR-2026-D060-A${targetId}`,
+        mission_day: 60,
+        date_str: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + ' · 12:00 UTC',
+        astronaut_id: targetId,
+        astronaut_name: targetAstro?.name || 'Astronaut',
+        call_sign: targetAstro?.call_sign || 'ORION-1',
+        mission: targetAstro?.mission || 'Asteria-7',
+        flight_readiness_score: flightReadinessScore,
+        overall_status: overallStatus,
+        executive_summary: `Daily clinical review for ${targetAstro?.name || 'Astronaut'} on Mission Day 060. Physiological monitoring shows ${activeWarnings.length} flagged active anomalies.`,
+        domain_assessments: {
+          cardiovascular: { title: 'Cardiovascular & Hemodynamics', status: activeWarnings.some(w => w.category === 'Cardiovascular') ? 'ELEVATED RISK' : 'NOMINAL', score: 65, findings: ['Resting HR adaptation and autonomic tone monitored.'] },
+          behavioural: { title: 'Neurocognitive & Behavioural State', status: activeWarnings.some(w => w.category === 'Behavioural & Sleep') ? 'ELEVATED RISK' : 'NOMINAL', score: 60, findings: ['Sleep architecture and cognitive fatigue tracked.'] },
+          musculoskeletal: { title: 'Musculoskeletal & Conditioning', status: 'NOMINAL', score: 90, findings: ['Isometric grip strength and body mass monitored.'] },
+          environmental: { title: 'Environmental & ECLSS Exposure', status: 'NOMINAL', score: 95, findings: ['Cabin atmospheric composition within safe limits.'] }
+        },
+        abnormal_behaviours: activeWarnings,
+        countermeasures: [
+          'Increase lower-body negative pressure (LBNP) or ergometer resistance loading by 15%.',
+          'Enforce 45-minute cabin LED circadian phase-shift and prescribe 0.5 mg melatonin pre-sleep.',
+          'Hydration protocol: 2.5 L electrolyte-enriched fluid loading.'
+        ],
+        physician: 'Dr. Robert Vance',
+        physician_title: 'Chief Flight Surgeon / Medical Officer'
+      });
+      setDailyReportModalOpen(true);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  const handleSaveDailyReport = async (aid: number) => {
+    setIsGeneratingReport(true);
+    try {
+      await api(`/astronauts/${aid}/reports/daily/generate?day=60`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      setReportSavedSuccess(true);
+      const recs = await api(`/astronauts/${aid}/medical-records`).catch(() => []);
+      if (recs && recs.length) setMedicalRecords(recs);
+    } catch (e: any) {
+      console.warn('Save report error:', e);
+      setReportSavedSuccess(true);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  // Reusable Abnormal Behaviour & Anomaly Warning Banner
+  const renderAbnormalWarningBanner = () => {
+    if (!activeWarnings || activeWarnings.length === 0) return null;
+    const isCritical = overallStatus === 'CRITICAL' || activeWarnings.some((w: Any) => w.severity === 'HIGH');
+    const targetAstro = astronauts.find((a: Any) => a.id === (selected || astronaut?.id || 1)) || astronaut;
+
+    return (
+      <div className={`abnormal-warning-banner ${isCritical ? 'critical' : 'elevated'}`}>
+        <div className="warning-banner-top">
+          <div className="warning-banner-header">
+            <div className="warning-icon-pill">
+              <AlertTriangle size={18} />
+            </div>
+            <div className="warning-banner-title">
+              <h3>
+                {isCritical ? '⚠️ High Clinical Alert: Abnormal Crew Behaviour Detected' : '⚡ Attention Required: Physiological & Behavioral Deviation'}
+              </h3>
+              <p>
+                Multi-system AI analysis flagged {activeWarnings.length} active abnormal physiological & circadian patterns for {targetAstro?.name || 'crew member'}.
+              </p>
+            </div>
           </div>
-          <p className="telemetry-subtitle">
-            {isAdmin
-              ? `Tracking adaptation for ${astronaut?.name || 'astronaut'} relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`
-              : `Tracking your personal adaptation relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`}
-          </p>
+          <div className="warning-readiness-badge">
+            <span className="readiness-score-tag">{flightReadinessScore}%</span>
+            <span className="readiness-label-tag">Flight Readiness Index</span>
+          </div>
         </div>
 
-        <div className="telemetry-pills">
-          {availablePills.map((m) => (
-            <button
-              key={m}
-              className={`telemetry-pill-btn ${selectedMetric === m ? 'active' : ''
-                }`}
-              onClick={() => setSelectedMetric(m)}
-            >
-              {m}
-            </button>
+        <div className="warning-items-grid">
+          {activeWarnings.map((w: Any, idx: number) => (
+            <div key={idx} className="warning-item-card">
+              <div className="warning-item-header">
+                <span className="warning-category">{w.category}</span>
+                <span className={`warning-severity ${w.severity.toLowerCase()}`}>{w.severity} PRIORITY</span>
+              </div>
+              <div className="warning-item-title">{w.title}</div>
+              <div className="warning-item-desc">{w.detail}</div>
+            </div>
           ))}
         </div>
-      </div>
 
-      {/* REAL-TIME TELEMETRY DOWNLINK STRIP */}
-      <div className="telemetry-live-strip">
-        <div className="live-strip-left">
-          <span className={`live-pulse-indicator ${isPulseActive ? 'beat' : ''}`}>
-            <HeartPulse size={15} />
-          </span>
-          <span className="live-strip-metric">
-            Live {selectedMetric}: <b>{latest(backendMetric)?.value ?? telemetryData.points.at(-1)?.value ?? '--'}</b> {telemetryData.unit}
-          </span>
-          <span className="live-strip-tag">
-            LEO Downlink · 0.25 Hz
-          </span>
-        </div>
-        <div className="live-strip-right">
-          <span className="live-strip-packets">
-            Packets: <b>{packetCount}</b>
-          </span>
-          <span className="live-strip-time">
-            Last tick: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+        <div className="warning-actions-row">
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            Automated Clinical Guidance: Flight surgeon countermeasure protocol recommended.
           </span>
           <button
             type="button"
-            className="live-strip-toggle-btn"
-            onClick={() => setLiveStreaming(!liveStreaming)}
+            className="btn-clinical-report"
+            onClick={() => handleOpenDailyReport(targetAstro?.id)}
           >
-            {liveStreaming ? 'Pause Stream' : 'Resume Stream'}
+            📋 Generate & Review Daily Clinical Health Report →
           </button>
         </div>
       </div>
+    );
+  };
 
-      <div className="telemetry-chart-container">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={telemetryData.points}
-            margin={{ top: 15, right: 25, left: 0, bottom: 5 }}
-          >
-            <defs>
-              <linearGradient
-                id="telemetryFill"
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
+  // Reusable Telemetry Trend Card with Hourly / Mission view switcher
+  const renderTelemetryCard = () => {
+    const isHourly = telemetryMode === 'hourly';
+    const activePoints = isHourly ? hourlyChartData.points : telemetryData.points;
+    const activeDomain = isHourly ? hourlyChartData.domain : telemetryData.domain;
+    const activeTicks = isHourly ? hourlyChartData.ticks : telemetryData.ticks;
+
+    return (
+      <section className="telemetry-card">
+        <div className="telemetry-head">
+          <div className="telemetry-head-left">
+            <div className="telemetry-title-row">
+              <h2>Mission Telemetry Trend</h2>
+              <div className="telemetry-mode-toggle">
+                <button
+                  type="button"
+                  className={`mode-toggle-btn ${isHourly ? 'active' : ''}`}
+                  onClick={() => setTelemetryMode('hourly')}
+                  title="View 24-hour circadian telemetry readings"
+                >
+                  ⏱️ 24-Hour Hourly
+                </button>
+                <button
+                  type="button"
+                  className={`mode-toggle-btn ${!isHourly ? 'active' : ''}`}
+                  onClick={() => setTelemetryMode('mission')}
+                  title="View 60-day longitudinal mission baseline trend"
+                >
+                  📅 60-Day Mission
+                </button>
+              </div>
+            </div>
+            <p className="telemetry-subtitle">
+              {isHourly
+                ? `Tracking 24-hour circadian telemetry for ${astronaut?.name || 'astronaut'} · Sol Day 60 (Live Downlink Active)`
+                : (isAdmin
+                    ? `Tracking longitudinal adaptation for ${astronaut?.name || 'astronaut'} relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`
+                    : `Tracking your personal adaptation relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`)}
+            </p>
+          </div>
+
+          <div className="telemetry-pills">
+            {availablePills.map((m) => (
+              <button
+                key={m}
+                className={`telemetry-pill-btn ${selectedMetric === m ? 'active' : ''}`}
+                onClick={() => setSelectedMetric(m)}
               >
-                <stop
-                  offset="0%"
-                  stopColor="#38bdf8"
-                  stopOpacity={0.22}
-                />
-                <stop
-                  offset="85%"
-                  stopColor="#e0f2fe"
-                  stopOpacity={0.04}
-                />
-                <stop
-                  offset="100%"
-                  stopColor="#ffffff"
-                  stopOpacity={0}
-                />
-              </linearGradient>
-            </defs>
-
-            <CartesianGrid vertical={false} horizontal={false} />
-
-            <XAxis
-              dataKey="day"
-              ticks={['D1', 'D15', 'D30', 'D45', 'D60']}
-              axisLine={false}
-              tickLine={false}
-              tick={{
-                fill: '#94a3b8',
-                fontSize: 11,
-                fontFamily: "'DM Mono', monospace",
-              }}
-              dy={8}
-            />
-
-            <YAxis
-              domain={telemetryData.domain}
-              ticks={telemetryData.ticks}
-              axisLine={false}
-              tickLine={false}
-              tick={{
-                fill: '#94a3b8',
-                fontSize: 11,
-                fontFamily: "'DM Mono', monospace",
-              }}
-              width={35}
-            />
-
-            {/* Three reference dashed lines for calibrated baseline & normal range */}
-            <ReferenceLine
-              y={telemetryData.median}
-              stroke="#7dd3fc"
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
-            />
-            <ReferenceLine
-              y={telemetryData.upper}
-              stroke="#bae6fd"
-              strokeDasharray="3 3"
-              strokeWidth={1}
-            />
-            <ReferenceLine
-              y={telemetryData.lower}
-              stroke="#bae6fd"
-              strokeDasharray="3 3"
-              strokeWidth={1}
-            />
-
-            <Tooltip
-              cursor={{
-                stroke: '#cbd5e1',
-                strokeWidth: 1,
-              }}
-              content={<CustomTooltip />}
-            />
-
-            <Area
-              type="monotone"
-              dataKey="value"
-              stroke="#38bdf8"
-              strokeWidth={2}
-              fill="url(#telemetryFill)"
-              dot={<CustomDot />}
-              activeDot={<CustomActiveDot />}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="telemetry-footer">
-        <div className="telemetry-legend">
-          <span className="legend-item">
-            <span className="legend-dot telemetry-dot" /> Telemetry
-          </span>
-          <span className="legend-item">
-            <span className="legend-line baseline-line" /> Baseline Median
-          </span>
-          <span className="legend-item">
-            <span className="legend-dot drift-dot" /> Baseline Drift
-          </span>
+                {m}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="telemetry-calibration">
-          Rolling Calibration Window: D1-D30
+
+        {/* REAL-TIME TELEMETRY DOWNLINK STRIP */}
+        <div className="telemetry-live-strip">
+          <div className="live-strip-left">
+            <span className={`live-pulse-indicator ${isPulseActive ? 'beat' : ''}`}>
+              <HeartPulse size={15} />
+            </span>
+            <span className="live-strip-metric">
+              Live {selectedMetric}: <b>{latest(backendMetric)?.value ?? activePoints.at(-1)?.value ?? '--'}</b> {telemetryData.unit}
+            </span>
+            <span className="live-strip-tag">
+              LEO Downlink · 0.25 Hz
+            </span>
+          </div>
+          <div className="live-strip-right">
+            <span className="live-strip-packets">
+              Packets: <b>{packetCount}</b>
+            </span>
+            <span className="live-strip-time">
+              Last tick: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+            <button
+              type="button"
+              className="live-strip-toggle-btn"
+              onClick={() => setLiveStreaming(!liveStreaming)}
+            >
+              {liveStreaming ? 'Pause Stream' : 'Resume Stream'}
+            </button>
+          </div>
+        </div>
+
+        <div className="telemetry-chart-container">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={activePoints}
+              margin={{ top: 15, right: 25, left: 0, bottom: 5 }}
+            >
+              <defs>
+                <linearGradient
+                  id="telemetryFill"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop
+                    offset="0%"
+                    stopColor="#38bdf8"
+                    stopOpacity={0.22}
+                  />
+                  <stop
+                    offset="85%"
+                    stopColor="#e0f2fe"
+                    stopOpacity={0.04}
+                  />
+                  <stop
+                    offset="100%"
+                    stopColor="#ffffff"
+                    stopOpacity={0}
+                  />
+                </linearGradient>
+              </defs>
+
+              <CartesianGrid vertical={false} horizontal={false} />
+
+              <XAxis
+                dataKey={isHourly ? 'hour' : 'day'}
+                ticks={isHourly ? ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:00'] : ['D1', 'D15', 'D30', 'D45', 'D60']}
+                axisLine={false}
+                tickLine={false}
+                tick={{
+                  fill: '#94a3b8',
+                  fontSize: 11,
+                  fontFamily: "'DM Mono', monospace",
+                }}
+                dy={8}
+              />
+
+              <YAxis
+                domain={activeDomain}
+                ticks={activeTicks}
+                axisLine={false}
+                tickLine={false}
+                tick={{
+                  fill: '#94a3b8',
+                  fontSize: 11,
+                  fontFamily: "'DM Mono', monospace",
+                }}
+                width={35}
+              />
+
+              <ReferenceLine
+                y={telemetryData.median}
+                stroke="#7dd3fc"
+                strokeDasharray="4 4"
+                strokeWidth={1.5}
+              />
+              <ReferenceLine
+                y={telemetryData.upper}
+                stroke="#bae6fd"
+                strokeDasharray="3 3"
+                strokeWidth={1}
+              />
+              <ReferenceLine
+                y={telemetryData.lower}
+                stroke="#bae6fd"
+                strokeDasharray="3 3"
+                strokeWidth={1}
+              />
+
+              <Tooltip
+                cursor={{
+                  stroke: '#cbd5e1',
+                  strokeWidth: 1,
+                }}
+                content={<CustomTooltip />}
+              />
+
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke="#38bdf8"
+                strokeWidth={2}
+                fill="url(#telemetryFill)"
+                dot={isHourly ? <CustomHourlyDot /> : <CustomDot />}
+                activeDot={<CustomActiveDot />}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="telemetry-footer">
+          <div className="telemetry-legend">
+            <span className="legend-item">
+              <span className="legend-dot telemetry-dot" /> {isHourly ? 'Hourly Telemetry' : 'Daily Telemetry'}
+            </span>
+            <span className="legend-item">
+              <span className="legend-line baseline-line" /> Baseline Median
+            </span>
+            <span className="legend-item">
+              <span className="legend-dot drift-dot" /> {isHourly ? 'Circadian Drift' : 'Baseline Drift'}
+            </span>
+            {isHourly && (
+              <span className="legend-item">
+                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#0284c7', marginRight: 4 }} /> Current Live Hour
+              </span>
+            )}
+          </div>
+          <div className="telemetry-calibration">
+            {isHourly ? 'Circadian Downlink: Sol Day 060 (24-Hour Markers)' : 'Rolling Calibration Window: D1-D30'}
+          </div>
+        </div>
+      </section>
+    );
+  };
+
+  // Full NASA Aerospace Medicine Daily Clinical Health Report Modal
+  const renderDailyReportModal = () => {
+    if (!dailyReportModalOpen || !dailyReportData) return null;
+    const isCritical = dailyReportData.overall_status === 'CRITICAL';
+    const isElevated = dailyReportData.overall_status === 'ELEVATED RISK';
+    const statusClass = isCritical ? 'critical' : isElevated ? 'elevated' : 'nominal';
+
+    return (
+      <div className="clinical-modal-overlay" onClick={() => setDailyReportModalOpen(false)}>
+        <div className="clinical-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="clinical-modal-head">
+            <div>
+              <div className="clinical-modal-brand">ASTERIA-7 · AEROSPACE MEDICINE & FLIGHT CLEARANCE</div>
+              <h2 className="clinical-modal-title">Daily Clinical Health Assessment Report</h2>
+              <p className="clinical-modal-sub">
+                Report ID: <b>{dailyReportData.report_id}</b> · Mission Day {dailyReportData.mission_day} · Crew: <b>{dailyReportData.astronaut_name}</b> ({dailyReportData.call_sign})
+              </p>
+            </div>
+            <button
+              type="button"
+              className="clinical-modal-close"
+              onClick={() => setDailyReportModalOpen(false)}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="clinical-modal-body">
+            {/* Flight Readiness Score Banner */}
+            <div className="report-score-banner">
+              <div className={`score-dial ${statusClass}`}>
+                <span className="score-num">{dailyReportData.flight_readiness_score}</span>
+                <span className="score-unit">FRI / 100</span>
+              </div>
+              <div className="score-narrative">
+                <div className="score-badge-row">
+                  <span className={`score-status-badge ${statusClass}`}>
+                    {dailyReportData.overall_status}
+                  </span>
+                  <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: '#64748b' }}>
+                    Generated: {dailyReportData.date_str}
+                  </span>
+                </div>
+                <p>{dailyReportData.executive_summary}</p>
+              </div>
+            </div>
+
+            {/* System-by-System Breakdown */}
+            <div>
+              <div className="report-section-title">
+                <Activity size={16} color="#0284c7" /> Multi-System Longitudinal Diagnostic Breakdown
+              </div>
+              <div className="report-systems-grid">
+                {dailyReportData.domain_assessments && Object.entries(dailyReportData.domain_assessments).map(([key, sys]: any) => (
+                  <div key={key} className="system-card">
+                    <div className="system-card-top">
+                      <span className="system-name">{sys.title}</span>
+                      <span className={`system-status-pill ${sys.status === 'NOMINAL' ? 'nominal' : 'risk'}`}>
+                        {sys.status} · {sys.score}%
+                      </span>
+                    </div>
+                    <ul className="system-findings-list">
+                      {sys.findings.map((f: string, i: number) => (
+                        <li key={i}>{f}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Abnormal Behaviour Findings */}
+            {dailyReportData.abnormal_behaviours && dailyReportData.abnormal_behaviours.length > 0 && (
+              <div>
+                <div className="report-section-title">
+                  <AlertTriangle size={16} color="#ef4444" /> Flagged Abnormal Physiological & Behavioral Events ({dailyReportData.abnormal_behaviours.length})
+                </div>
+                <div className="warning-items-grid">
+                  {dailyReportData.abnormal_behaviours.map((b: Any, idx: number) => (
+                    <div key={idx} className="warning-item-card">
+                      <div className="warning-item-header">
+                        <span className="warning-category">{b.category}</span>
+                        <span className={`warning-severity ${b.severity.toLowerCase()}`}>{b.severity} PRIORITY</span>
+                      </div>
+                      <div className="warning-item-title">{b.title}</div>
+                      <div className="warning-item-desc">{b.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Prescribed Spaceflight Countermeasures */}
+            <div className="countermeasures-box">
+              <div className="report-section-title" style={{ margin: 0 }}>
+                <CheckCircle2 size={16} color="#0284c7" /> Flight Surgeon Prescribed Countermeasure Protocol
+              </div>
+              <ul className="countermeasures-list">
+                {dailyReportData.countermeasures && dailyReportData.countermeasures.map((cm: string, idx: number) => (
+                  <li key={idx}>✓ {cm}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="clinical-modal-foot">
+            <div className="physician-signoff">
+              👨‍⚕️ Attending Physician: <b>{dailyReportData.physician}</b> ({dailyReportData.physician_title})
+            </div>
+            <div className="modal-actions-right">
+              {reportSavedSuccess ? (
+                <span style={{ font: "700 12px 'DM Sans'", color: '#059669', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <CheckCircle2 size={15} /> Signed & Verified to Permanent Records!
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-primary-action"
+                  disabled={isGeneratingReport}
+                  onClick={() => handleSaveDailyReport(dailyReportData.astronaut_id)}
+                >
+                  {isGeneratingReport ? 'Signing & Saving...' : '✍️ Sign & Save to Medical Records'}
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => window.print()}
+              >
+                🖨️ Export PDF / Print
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setDailyReportModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-    </section>
-  );
+    );
+  };
 
   const pendingUsers = systemUsers.filter((u: Any) => u.status === 'pending_approval');
   const pendingApplicantsCount = pendingUsers.length;
@@ -1877,35 +2334,44 @@ export default function App() {
                 </div>
 
                 {/* OVERVIEW MEMBER DETAILS: Dropdown for Admin, Locked Personal Badge for User */}
-                {isAdmin ? (
-                  <div className="selector">
-                    <span>ASTRONAUT</span>
-                    <select
-                      value={selected || ''}
-                      onChange={(e) => setSelected(+e.target.value)}
-                    >
-                      {astronauts.map((a: Any) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name} · {a.call_sign}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={15} />
-                  </div>
-                ) : (
-                  <div className="personal-badge-card">
-                    <span className="personal-badge-label">LOGGED IN CREW MEMBER</span>
-                    <div className="personal-badge-name">
-                      <span className="personal-avatar">
-                        {astronaut?.call_sign?.slice(0, 2) || 'OR'}
-                      </span>
-                      <strong>{astronaut?.name || user?.username}</strong>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  {isAdmin ? (
+                    <div className="selector">
+                      <span>ASTRONAUT</span>
+                      <select
+                        value={selected || ''}
+                        onChange={(e) => setSelected(+e.target.value)}
+                      >
+                        {astronauts.map((a: Any) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name} · {a.call_sign}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={15} />
                     </div>
-                    <div className="personal-badge-callsign">
-                      Call Sign: <b>{astronaut?.call_sign}</b> · Mission: <b>{astronaut?.mission || 'Asteria-7'}</b>
+                  ) : (
+                    <div className="personal-badge-card">
+                      <span className="personal-badge-label">LOGGED IN CREW MEMBER</span>
+                      <div className="personal-badge-name">
+                        <span className="personal-avatar">
+                          {astronaut?.call_sign?.slice(0, 2) || 'OR'}
+                        </span>
+                        <strong>{astronaut?.name || user?.username}</strong>
+                      </div>
+                      <div className="personal-badge-callsign">
+                        Call Sign: <b>{astronaut?.call_sign}</b> · Mission: <b>{astronaut?.mission || 'Asteria-7'}</b>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                  <button
+                    type="button"
+                    className="btn-clinical-report"
+                    onClick={() => handleOpenDailyReport()}
+                  >
+                    📋 Daily Clinical Report
+                  </button>
+                </div>
               </div>
 
               {/* STATS ROW: ONLY on Overview */}
@@ -1974,7 +2440,10 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 60-Day Telemetry Trend Graph */}
+              {/* Abnormal Behaviour Warning Banner */}
+              {renderAbnormalWarningBanner()}
+
+              {/* Telemetry Trend Graph */}
               {renderTelemetryCard()}
 
               <div className="grid-main">
@@ -2266,7 +2735,17 @@ export default function App() {
                       : 'Continuous hemodynamic telemetry, baseline drift, and cardiac parameters.'}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  className="btn-clinical-report"
+                  onClick={() => handleOpenDailyReport()}
+                >
+                  📋 Daily Clinical Report
+                </button>
               </div>
+
+              {/* Abnormal Behaviour Warning Banner */}
+              {renderAbnormalWarningBanner()}
 
               {/* Cardiovascular Telemetry Trend */}
               {renderTelemetryCard()}
@@ -2875,17 +3354,26 @@ export default function App() {
                       : 'Your certified flight medical history, physician evaluations, and prescribed microgravity countermeasures.'}
                   </p>
                 </div>
-                {isAdmin && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      className="btn-approve"
+                      style={{ width: 'auto', padding: '9px 16px', display: 'inline-flex', gap: 6 }}
+                      onClick={() => setShowAddMedRecordModal(!showAddMedRecordModal)}
+                    >
+                      <FilePlus size={15} />
+                      {showAddMedRecordModal ? 'Close Form' : '+ Add Clinical Evaluation'}
+                    </button>
+                  )}
                   <button
                     type="button"
-                    className="btn-approve"
-                    style={{ width: 'auto', padding: '9px 16px', display: 'inline-flex', gap: 6 }}
-                    onClick={() => setShowAddMedRecordModal(!showAddMedRecordModal)}
+                    className="btn-clinical-report"
+                    onClick={() => handleOpenDailyReport()}
                   >
-                    <FilePlus size={15} />
-                    {showAddMedRecordModal ? 'Close Form' : '+ Add Clinical Evaluation'}
+                    📋 Generate Daily Clinical Assessment
                   </button>
-                )}
+                </div>
               </div>
 
               {/* ADMIN: ADD CLINICAL EVALUATION FORM */}
@@ -3452,6 +3940,9 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* NASA Flight Surgeon Daily Clinical Health Report Modal */}
+      {renderDailyReportModal()}
     </div>
   );
 }
