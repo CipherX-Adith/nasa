@@ -146,6 +146,7 @@ export default function App() {
 
   // Collapsible navigation popup menu triggered by arrow mark under the logo
   const [navPopupOpen, setNavPopupOpen] = useState(false);
+  const [warningsExpanded, setWarningsExpanded] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1667,9 +1668,10 @@ export default function App() {
     if (!activeWarnings || activeWarnings.length === 0) return null;
     const isCritical = activeWarnings.some((w: Any) => w.severity === 'PRIORITY REVIEW');
     const targetAstro = astronauts.find((a: Any) => a.id === (selected || astronaut?.id || 1)) || astronaut;
+    const visibleWarnings = warningsExpanded ? activeWarnings : activeWarnings.slice(0, 4);
 
     return (
-      <div className={`abnormal-warning-banner ${isCritical ? 'critical' : 'elevated'}`}>
+      <div className={`abnormal-warning-banner ${isCritical ? 'critical' : 'elevated'}`} style={{ marginTop: '16px' }}>
         <div className="warning-banner-top">
           <div className="warning-banner-header">
             <div className="warning-icon-pill">
@@ -1691,7 +1693,7 @@ export default function App() {
         </div>
 
         <div className="warning-items-grid">
-          {activeWarnings.map((w: Any, idx: number) => (
+          {visibleWarnings.map((w: Any, idx: number) => (
             <div key={idx} className="warning-item-card">
               <div className="warning-item-header">
                 <span className="warning-category">{w.category}</span>
@@ -1704,9 +1706,21 @@ export default function App() {
         </div>
 
         <div className="warning-actions-row">
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            Review the underlying measurements and sources; this prototype does not recommend treatment.
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              Review the underlying measurements and sources; this prototype does not recommend treatment.
+            </span>
+            {activeWarnings.length > 4 && (
+              <button
+                type="button"
+                className="text-button"
+                style={{ fontSize: '12px', fontWeight: 700, color: 'var(--primary-accent)', cursor: 'pointer', padding: '2px 6px' }}
+                onClick={() => setWarningsExpanded(!warningsExpanded)}
+              >
+                {warningsExpanded ? '▲ Collapse baseline deviations' : `▼ View all ${activeWarnings.length} baseline deviations`}
+              </button>
+            )}
+          </div>
           <button
             type="button"
             className="btn-clinical-report"
@@ -2698,11 +2712,11 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Mission Telemetry Trend Graph - Priority #1 */}
+              {renderTelemetryCard()}
+
               {/* Abnormal Behaviour Warning Banner */}
               {renderAbnormalWarningBanner()}
-
-              {/* Telemetry Trend Graph */}
-              {renderTelemetryCard()}
 
               <div className="grid-main">
                 <section className="panel alert-panel">
@@ -2995,11 +3009,11 @@ export default function App() {
                 {renderHeaderCrewControls()}
               </div>
 
+              {/* Cardiovascular Telemetry Trend - Priority #1 */}
+              {renderTelemetryCard()}
+
               {/* Abnormal Behaviour Warning Banner */}
               {renderAbnormalWarningBanner()}
-
-              {/* Cardiovascular Telemetry Trend */}
-              {renderTelemetryCard()}
 
               <div className="grid-main" style={{ marginTop: '16px' }}>
                 <section className="panel" style={{ gridColumn: 'span 2' }}>
