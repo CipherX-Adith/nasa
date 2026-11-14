@@ -449,31 +449,32 @@ button {
 .selector {
   background: var(--bg-card);
   border: 1px solid var(--border-input);
-  border-radius: 7px;
-  padding: 8px 11px;
+  border-radius: 11px;
+  padding: 9px 14px;
   display: grid;
   grid-template-columns: 1fr auto;
-  min-width: 210px;
+  min-width: 230px;
   position: relative;
-  box-shadow: var(--shadow-domain);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .selector span {
-  font: 500 8px 'DM Mono', monospace;
-  letter-spacing: .1em;
-  color: var(--text-muted);
+  font: 600 8.5px 'DM Mono', monospace;
+  letter-spacing: .12em;
+  color: #0d9488;
   grid-column: span 2;
+  margin-bottom: 2px;
 }
 
 .selector select {
   background: transparent;
   border: 0;
-  color: var(--text-main);
-  font-size: 12px;
+  color: var(--text-heading);
+  font: 600 13.5px Manrope, sans-serif;
   outline: 0;
   appearance: none;
-  padding-top: 3px;
   cursor: pointer;
+  padding-right: 22px;
 }
 
 .selector select option {
@@ -483,8 +484,8 @@ button {
 
 .selector svg {
   position: absolute;
-  right: 10px;
-  bottom: 9px;
+  right: 12px;
+  bottom: 11px;
   color: var(--text-muted);
   pointer-events: none;
 }
@@ -630,48 +631,49 @@ button {
 .personal-badge-card {
   background: var(--bg-card);
   border: 1px solid var(--border-input);
-  border-radius: 9px;
-  padding: 8px 14px;
-  min-width: 220px;
-  box-shadow: var(--shadow-domain);
+  border-radius: 11px;
+  padding: 9px 14px;
+  min-width: 240px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
 .personal-badge-label {
-  font: 600 8px 'DM Mono', monospace;
-  letter-spacing: .1em;
-  color: var(--primary-accent);
+  font: 600 8.5px 'DM Mono', monospace;
+  letter-spacing: .12em;
+  color: #0d9488;
 }
 
 .personal-badge-name {
   display: flex;
   align-items: center;
   gap: 8px;
-  font: 700 13px Manrope, sans-serif;
+  font: 700 14px Manrope, sans-serif;
   color: var(--text-heading);
 }
 
 .personal-avatar {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: var(--primary-bg);
-  border: 1px solid var(--primary-border);
-  color: var(--primary-accent);
+  background: rgba(13, 148, 136, 0.08);
+  border: 1.5px solid rgba(13, 148, 136, 0.4);
+  color: #0d9488;
   display: inline-grid;
   place-items: center;
   font: 700 9px 'DM Mono', monospace;
 }
 
 .personal-badge-callsign {
-  font: 500 10px 'DM Mono', monospace;
+  font: 500 11px 'DM Mono', monospace;
   color: var(--text-muted);
 }
 
 .personal-badge-callsign b {
   color: var(--text-heading);
+  font-weight: 600;
 }
 
 /* Quick Access Login Presets */

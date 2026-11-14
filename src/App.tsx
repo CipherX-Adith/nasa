@@ -776,8 +776,8 @@ export default function App() {
             ASTERIA-7 <span>/</span> {isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'} <span>/</span> {tab.toUpperCase()}
           </div>
           <div className="top-right">
-            {/* Astronaut Selector in Topbar for Admin (Medical Officer) */}
-            {isAdmin && (
+            {/* Astronaut Selector in Topbar: Active when NOT on Overview (sub-views) */}
+            {tab !== 'Overview' && isAdmin && (
               <div className="topbar-crew-select" title="Switch monitored crew member">
                 <Users size={14} className="topbar-crew-icon" />
                 <span className="topbar-select-label">Crew:</span>
@@ -795,11 +795,11 @@ export default function App() {
               </div>
             )}
 
-            {/* Astronaut Badge in Topbar for User (Astronaut) */}
-            {isUser && (
+            {/* Astronaut Badge in Topbar: Active when NOT on Overview (sub-views) */}
+            {tab !== 'Overview' && isUser && (
               <div className="topbar-user-badge" title="Active Astronaut Profile">
                 <span className="topbar-user-avatar">
-                  {astronaut?.call_sign?.slice(0, 2) || 'AS'}
+                  {astronaut?.call_sign?.slice(0, 2) || 'OR'}
                 </span>
                 <span className="topbar-user-name">{astronaut?.name}</span>
                 <span className="topbar-user-callsign">{astronaut?.call_sign}</span>
@@ -862,6 +862,37 @@ export default function App() {
                       : `Personal health signals, baseline comparisons, and telemetry for ${astronaut?.name}.`}
                   </p>
                 </div>
+
+                {/* OVERVIEW MEMBER DETAILS: Dropdown for Admin, Locked Personal Badge for User */}
+                {isAdmin ? (
+                  <div className="selector">
+                    <span>ASTRONAUT</span>
+                    <select
+                      value={selected || ''}
+                      onChange={(e) => setSelected(+e.target.value)}
+                    >
+                      {astronauts.map((a: Any) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} · {a.call_sign}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={15} />
+                  </div>
+                ) : (
+                  <div className="personal-badge-card">
+                    <span className="personal-badge-label">LOGGED IN CREW MEMBER</span>
+                    <div className="personal-badge-name">
+                      <span className="personal-avatar">
+                        {astronaut?.call_sign?.slice(0, 2) || 'OR'}
+                      </span>
+                      <strong>{astronaut?.name || user?.username}</strong>
+                    </div>
+                    <div className="personal-badge-callsign">
+                      Call Sign: <b>{astronaut?.call_sign}</b> · Mission: <b>{astronaut?.mission || 'Asteria-7'}</b>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* STATS ROW: ONLY on Overview */}
