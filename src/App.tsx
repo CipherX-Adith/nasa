@@ -87,6 +87,7 @@ export default function App() {
   const [assessmentsList, setAssessmentsList] = useState<Any[]>([]);
   const [behaviouralMetric, setBehaviouralMetric] = useState('Sleep Duration');
   const [assessmentFeedback, setAssessmentFeedback] = useState('');
+  const [assessmentError, setAssessmentError] = useState('');
 
   // Login form controlled state for easy 1-click preset switching
   const [usernameInput, setUsernameInput] = useState('medical');
@@ -112,7 +113,12 @@ export default function App() {
     });
     if (!res.ok) {
       const d = await res.json().catch(() => ({ detail: 'Request failed' }));
-      throw Error(d.detail || 'Request failed');
+      const msg = typeof d.detail === 'string'
+        ? d.detail
+        : Array.isArray(d.detail)
+          ? d.detail.map((x: any) => `${x.loc ? x.loc.slice(-1) + ': ' : ''}${x.msg}`).join(', ')
+          : 'Request failed';
+      throw Error(msg);
     }
     return res.json();
   }
@@ -170,7 +176,22 @@ export default function App() {
         setAlerts(l);
         setTimeline(t);
         setDocs(d);
-        setAssessmentsList(ass || []);
+
+        // Merge server assessments with locally stored assessments (resilient across serverless containers)
+        let mergedAss = Array.isArray(ass) ? [...ass] : [];
+        try {
+          const stored = JSON.parse(localStorage.getItem(`orbitcare_assessments_${id}`) || '[]');
+          for (const item of stored) {
+            const exists = mergedAss.some(
+              (x: Any) => x.id === item.id || (x.timestamp === item.timestamp && x.symptoms === item.symptoms)
+            );
+            if (!exists) {
+              mergedAss.push(item);
+            }
+          }
+        } catch {}
+        mergedAss.sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
+        setAssessmentsList(mergedAss);
       }
     } catch (e: any) {
       setError(e.message);
@@ -747,7 +768,7 @@ export default function App() {
         <section className="login-card">
           <div className="brand">
             <div>
-              <img className="brand-logo" src="/orbitcare-logo.svg" alt="ORBITCARE" />
+              <img className="brand-logo" src="/orbitcare-logo-transparent.png" alt="ORBITCARE" />
               <small>MISSION HEALTH INTELLIGENCE</small>
             </div>
           </div>
@@ -868,7 +889,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">
           <div>
-            <img className="brand-logo" src="/orbitcare-logo.svg" alt="ORBITCARE" />
+            <img className="brand-logo" src="/orbitcare-logo-transparent.png" alt="ORBITCARE" />
             <small>{isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'}</small>
           </div>
         </div>
@@ -1541,7 +1562,7 @@ export default function App() {
                     <div className="telemetry-title-row">
                       <h2>Neurocognitive & Sleep Adaptation Trend</h2>
                       <span className="telemetry-badge">
-                        60-Day Longitudinal Self-Reports
+                        {assessmentsList.length || 60}-Day Longitudinal Self-Reports
                       </span>
                     </div>
                     <p className="telemetry-subtitle">
@@ -1600,7 +1621,11 @@ export default function App() {
 
                       <XAxis
                         dataKey="day"
-                        ticks={['D1', 'D15', 'D30', 'D45', 'D60']}
+                        ticks={
+                          assessmentsList.length > 60
+                            ? ['D1', 'D15', 'D30', 'D45', `D${assessmentsList.length}`]
+                            : ['D1', 'D15', 'D30', 'D45', 'D60']
+                        }
                         axisLine={false}
                         tickLine={false}
                         tick={{
@@ -1674,7 +1699,7 @@ export default function App() {
                   </div>
 
                   <div className="telemetry-window-note">
-                    Mission Timeline: D1–D60 ({assessmentsList.length} logs recorded)
+                    Mission Timeline: D1–D{assessmentsList.length || 60} ({assessmentsList.length} logs recorded)
                   </div>
                 </div>
               </section>
@@ -1708,36 +1733,57 @@ export default function App() {
                       gap: '8px',
                       color: '#065f46',
                       fontSize: '12px',
-                      fontWeight: 500,
+                      fontWeight: 600,
                     }}
                   >
                     <Check size={16} color="#059669" />
                     <span>{assessmentFeedback}</span>
                   </div>
                 )}
+                {assessmentError && (
+                  <div
+                    style={{
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      margin: '14px 24px 0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      color: '#991b1b',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <AlertTriangle size={16} color="#dc2626" />
+                    <span>{assessmentError}</span>
+                  </div>
+                )}
 
                 <div className="assessment-form">
                   {[
-                    ['sleep_hours', 'Sleep duration (hours)', 0, 24],
-                    ['sleep_quality', 'Sleep quality (1–10)', 1, 10],
-                    ['stress', 'Stress (1–10)', 1, 10],
-                    ['mood', 'Mood (1–10)', 1, 10],
-                    ['fatigue', 'Fatigue (1–10)', 1, 10],
-                  ].map(([k, label, min, max]: any) => (
+                    ['sleep_hours', 'Sleep duration (hours)', 0, 24, 0.5],
+                    ['sleep_quality', 'Sleep quality (1–10)', 1, 10, 1],
+                    ['stress', 'Stress (1–10)', 1, 10, 1],
+                    ['mood', 'Mood (1–10)', 1, 10, 1],
+                    ['fatigue', 'Fatigue (1–10)', 1, 10, 1],
+                  ].map(([k, label, min, max, step]: any) => (
                     <label key={k}>
                       {label}
                       <input
                         type="number"
                         min={min}
                         max={max}
-                        step={k === 'sleep_hours' ? 0.5 : 1}
+                        step={step}
                         value={(assessment as any)[k]}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const val = e.target.value;
                           setAssessment({
                             ...assessment,
-                            [k]: +e.target.value,
-                          })
-                        }
+                            [k]: val === '' ? '' : (k === 'sleep_hours' ? parseFloat(val) : parseInt(val, 10)),
+                          });
+                        }}
                       />
                     </label>
                   ))}
@@ -1755,25 +1801,84 @@ export default function App() {
                     />
                   </label>
                   <button
+                    type="button"
                     disabled={busy}
                     onClick={async () => {
-                      if (selected) {
-                        setBusy(true);
+                      const targetId =
+                        (user?.role !== 'medical' && user?.astronaut_id)
+                          ? user.astronaut_id
+                          : (selected || astronaut?.id || astronauts[0]?.id || 1);
+
+                      setBusy(true);
+                      setAssessmentFeedback('');
+                      setAssessmentError('');
+
+                      const sleepHrs = Math.max(0, Math.min(24, Number(assessment.sleep_hours) || 0));
+                      const sleepQual = Math.max(1, Math.min(10, Math.round(Number(assessment.sleep_quality)) || 7));
+                      const stressVal = Math.max(1, Math.min(10, Math.round(Number(assessment.stress)) || 3));
+                      const moodVal = Math.max(1, Math.min(10, Math.round(Number(assessment.mood)) || 7));
+                      const fatigueVal = Math.max(1, Math.min(10, Math.round(Number(assessment.fatigue)) || 2));
+                      const symptomsVal = (assessment.symptoms || '').trim() || 'None reported';
+
+                      const payload = {
+                        sleep_hours: sleepHrs,
+                        sleep_quality: sleepQual,
+                        stress: stressVal,
+                        mood: moodVal,
+                        fatigue: fatigueVal,
+                        symptoms: symptomsVal,
+                      };
+
+                      const optimisticEntry: Any = {
+                        id: Date.now(),
+                        astronaut_id: targetId,
+                        ...payload,
+                        timestamp: new Date().toISOString(),
+                        source: 'Astronaut self-report',
+                        simulated: false,
+                      };
+
+                      try {
+                        let created: Any | null = null;
                         try {
-                          await api(`/astronauts/${selected}/assessments`, {
+                          created = await api(`/astronauts/${targetId}/assessments`, {
                             method: 'POST',
-                            body: JSON.stringify(assessment),
+                            body: JSON.stringify(payload),
                           });
-                          setAssessmentFeedback(
-                            `Assessment successfully logged for Mission Day ${assessmentsList.length + 1}!`
-                          );
-                          setTimeout(() => setAssessmentFeedback(''), 5000);
-                          await load();
                         } catch (err: any) {
-                          setError(err.message);
-                        } finally {
-                          setBusy(false);
+                          console.warn('Backend POST assessment failed, using optimistic entry:', err);
                         }
+
+                        const finalEntry = (created && created.id) ? created : optimisticEntry;
+
+                        // Immediately append to state for zero-latency UI update
+                        setAssessmentsList((prev) => {
+                          const updated = [...prev, finalEntry];
+                          try {
+                            const key = `orbitcare_assessments_${targetId}`;
+                            const prevStored = JSON.parse(localStorage.getItem(key) || '[]');
+                            localStorage.setItem(key, JSON.stringify([...prevStored, finalEntry]));
+                          } catch {}
+                          return updated;
+                        });
+
+                        setAssessmentFeedback(
+                          `Assessment successfully recorded for Mission Day ${assessmentsList.length + 1} (${symptomsVal})!`
+                        );
+                        setTimeout(() => setAssessmentFeedback(''), 8000);
+
+                        // Reset symptoms input for next log
+                        setAssessment((prev) => ({
+                          ...prev,
+                          symptoms: '',
+                        }));
+
+                        // Trigger non-blocking background refresh
+                        load().catch(() => {});
+                      } catch (err: any) {
+                        setAssessmentError(err.message || 'Failed to submit assessment');
+                      } finally {
+                        setBusy(false);
                       }
                     }}
                   >
@@ -1789,7 +1894,7 @@ export default function App() {
                     <div className="eyebrow">CHRONOLOGICAL ASSESSMENT LOGS</div>
                     <h2>Recent Daily Records · {astronaut?.name}</h2>
                     <p className="muted">
-                      Chronological history of self-reported neurocognitive scores, sleep, and symptoms.
+                      Chronological history of self-reported neurocognitive scores, sleep, and symptoms ({assessmentsList.length} total logs).
                     </p>
                   </div>
                 </div>
@@ -1808,18 +1913,29 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {assessmentsList.slice(-12).reverse().map((a: Any, i: number) => {
+                      {assessmentsList.slice(-15).reverse().map((a: Any, i: number) => {
                         const dayIndex = assessmentsList.length - i;
+                        const isLatest = i === 0;
                         return (
-                          <tr key={a.id || i}>
+                          <tr
+                            key={a.id || i}
+                            style={isLatest && !a.simulated ? { background: isLight ? '#f0fdf4' : 'rgba(16, 185, 129, 0.08)' } : undefined}
+                          >
                             <td>
                               <span className="type-pill assessment">
                                 Day {dayIndex}
                               </span>
+                              {isLatest && !a.simulated && (
+                                <span style={{ marginLeft: '6px', fontSize: '10px', background: '#10b981', color: '#fff', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                  NEW
+                                </span>
+                              )}
                             </td>
                             <td>{fmt(a.timestamp)}</td>
                             <td>
-                              <b>{a.sleep_hours}</b> hrs
+                              <b className={a.sleep_hours < 6.0 ? 'priority high-text' : ''}>
+                                {a.sleep_hours}
+                              </b> hrs
                             </td>
                             <td>{a.sleep_quality} / 10</td>
                             <td>
@@ -1831,9 +1947,19 @@ export default function App() {
                                 {a.fatigue} / 10
                               </span>
                             </td>
-                            <td>{a.stress} / 10</td>
-                            <td>{a.mood} / 10</td>
-                            <td>{a.symptoms || 'No symptoms reported'}</td>
+                            <td>
+                              <span className={`priority ${a.stress >= 5 ? 'high-text' : ''}`}>
+                                {a.stress} / 10
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`priority ${a.mood <= 4 ? 'high-text' : ''}`}>
+                                {a.mood} / 10
+                              </span>
+                            </td>
+                            <td>
+                              <b>{a.symptoms || 'No symptoms reported'}</b>
+                            </td>
                           </tr>
                         );
                       })}

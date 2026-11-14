@@ -134,10 +134,6 @@
   --planet-shadow: 0 0 90px rgba(77, 201, 172, 0.27), inset -20px -12px 30px #081729;
 }
 
-[data-theme="dark"] .brand-logo {
-  filter: brightness(0) invert(1);
-}
-
 * {
   box-sizing: border-box;
 }
