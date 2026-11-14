@@ -1540,24 +1540,17 @@ export default function App() {
                 </button>
               </form>
 
-              {/* DEMO ACCESS CREDENTIALS & ONE-CLICK AUTO-FILL */}
-              <div className="demo-credentials-section">
-                <div className="demo-credentials-header">
-                  <span className="demo-credentials-title">
-                    DEMO ACCESS CREDENTIALS · CLICK TO AUTO-FILL
-                  </span>
-                  <span className="demo-pass-pill">
-                    Default Password: <b>orbitcare-demo</b>
-                  </span>
-                </div>
-
-                <div className="demo-credentials-grid">
+              {/* COMPACT AUTO-FILL DEMO ACCOUNT PILLS */}
+              <div className="login-quick-accounts">
+                <div className="login-quick-title">Quick Demo Sign-In (Click to Auto-Fill):</div>
+                <div className="login-quick-pills">
                   {demoAccounts.map((account) => {
                     const isSelected = usernameInput.toLowerCase() === account.username.toLowerCase();
                     return (
-                      <div
+                      <button
                         key={account.username}
-                        className={`demo-cred-card ${account.isAdmin ? 'admin-card' : ''} ${isSelected ? 'active' : ''}`}
+                        type="button"
+                        className={`quick-account-pill ${account.isAdmin ? 'admin' : ''} ${isSelected ? 'active' : ''}`}
                         onClick={() => {
                           setUsernameInput(account.username);
                           setPasswordInput('orbitcare-demo');
@@ -1565,24 +1558,14 @@ export default function App() {
                           setLoginClearancePending(false);
                         }}
                       >
-                        <div className="demo-cred-top">
-                          <span className={`demo-cred-badge ${account.isAdmin ? 'admin' : 'astronaut'}`}>
-                            {account.isAdmin ? (
-                              <ShieldCheck size={11} />
-                            ) : (
-                              <Users size={11} />
-                            )}
-                            {account.isAdmin ? 'Admin' : 'Astronaut'}
-                          </span>
-                          <span className="demo-cred-callsign">{account.callSign}</span>
-                        </div>
-                        <div className="demo-cred-name">{account.name}</div>
-                        <div className="demo-cred-sub">{account.specialization}</div>
-                        <div className="demo-cred-fields">
-                          <span>User: <code>{account.username}</code></span>
-                          <span>Pass: <code>orbitcare-demo</code></span>
-                        </div>
-                      </div>
+                        {account.isAdmin ? (
+                          <ShieldCheck size={13} className="pill-icon admin" />
+                        ) : (
+                          <Users size={13} className="pill-icon astronaut" />
+                        )}
+                        <span className="pill-name">{account.name}</span>
+                        <span className="pill-tag">@{account.username}</span>
+                      </button>
                     );
                   })}
                 </div>

@@ -862,174 +862,111 @@ button {
   font-weight: 600;
 }
 
-/* Quick Access Login Presets & Demo Credentials Grid */
-.demo-credentials-section {
+/* Clean Minimal Quick Demo Sign-In Pills */
+.login-quick-accounts {
   margin-top: 18px;
-  padding: 14px 16px;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-panel);
-  border-radius: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-panel);
 }
 
-.demo-credentials-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.demo-credentials-title {
+.login-quick-title {
   font-family: 'DM Mono', monospace;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--primary-accent);
+  color: var(--text-muted);
+  margin-bottom: 10px;
 }
 
-.demo-pass-pill {
-  font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  font-weight: 600;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-input);
-  padding: 2px 8px;
-  border-radius: 4px;
-  color: var(--text-heading);
-}
-
-.demo-pass-pill b {
-  color: var(--primary-accent);
-}
-
-.demo-credentials-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 9px;
-}
-
-@media (max-width: 580px) {
-  .demo-credentials-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.demo-cred-card {
+.login-quick-pills {
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-account-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   background: var(--bg-panel);
   border: 1.5px solid var(--border-panel);
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: var(--text-main);
   cursor: pointer;
-  text-align: left;
-  transition: all 0.16s ease;
-  position: relative;
+  transition: all 0.15s ease;
+  user-select: none;
 }
 
-.demo-cred-card:hover {
-  border-color: var(--primary);
-  background: var(--bg-domain-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-}
-
-.demo-cred-card.active {
-  border-color: var(--primary);
+.quick-account-pill:hover {
   background: var(--primary-bg);
+  border-color: var(--primary-border);
+  color: var(--primary-accent);
+  transform: translateY(-1px);
+}
+
+.quick-account-pill.active {
+  background: var(--primary-bg);
+  border-color: var(--primary);
+  color: var(--primary-accent);
+  font-weight: 600;
   box-shadow: 0 0 0 1px var(--primary);
 }
 
-.demo-cred-card.admin-card.active {
+.quick-account-pill.admin {
+  border-color: var(--border-panel);
+}
+
+.quick-account-pill.admin:hover,
+.quick-account-pill.admin.active {
+  background: #fef3c7;
   border-color: #f59e0b;
+  color: #92400e;
   box-shadow: 0 0 0 1px #f59e0b;
 }
 
-.demo-cred-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 5px;
-}
-
-.demo-cred-badge {
-  font-family: 'DM Mono', monospace;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.demo-cred-badge.admin {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fde68a;
-}
-
-.demo-cred-badge.astronaut {
-  background: #e0f2fe;
-  color: #0369a1;
-  border: 1px solid #bae6fd;
-}
-
-[data-theme='dark'] .demo-cred-badge.admin {
+[data-theme='dark'] .quick-account-pill.admin:hover,
+[data-theme='dark'] .quick-account-pill.admin.active {
   background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
   color: #fbbf24;
-  border-color: rgba(245, 158, 11, 0.3);
 }
 
-[data-theme='dark'] .demo-cred-badge.astronaut {
-  background: rgba(56, 189, 248, 0.15);
+.pill-icon.admin {
+  color: #d97706;
+}
+
+.pill-icon.astronaut {
+  color: #0284c7;
+}
+
+[data-theme='dark'] .pill-icon.astronaut {
   color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.3);
 }
 
-.demo-cred-callsign {
+.pill-name {
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.pill-tag {
   font-family: 'DM Mono', monospace;
   font-size: 10px;
   font-weight: 600;
-  color: var(--text-muted);
-}
-
-.demo-cred-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-heading);
-  margin-bottom: 2px;
-}
-
-.demo-cred-sub {
-  font-size: 10.5px;
-  color: var(--text-muted);
-  margin-bottom: 7px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.demo-cred-fields {
-  font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  color: var(--text-muted);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  color: var(--primary-accent);
   background: var(--bg-subtle);
-  padding: 4px 7px;
+  padding: 2px 6px;
   border-radius: 4px;
 }
 
-.demo-cred-fields code {
-  color: var(--primary-accent);
-  font-weight: 700;
+.quick-account-pill.admin .pill-tag {
+  color: #b45309;
+}
+
+[data-theme='dark'] .quick-account-pill.admin .pill-tag {
+  color: #f59e0b;
 }
 
 .stats {
