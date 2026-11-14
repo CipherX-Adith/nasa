@@ -7,7 +7,5 @@ passlib
 bcrypt
 python-multipart
 pypdf
-numpy
-google-generativeai
 pytest
 httpx

@@ -1,11 +1,13 @@
-import numpy as np
+import statistics
 from collections import defaultdict
 
 def baseline(values):
-    clean=np.asarray([float(v) for v in values if v is not None],dtype=float)
-    if len(clean)<5: return {"available":False,"count":len(clean),"reason":"At least 5 historical observations are needed.","median":None,"mad":None,"period":"Available history"}
-    med=float(np.median(clean)); mad=float(np.median(np.abs(clean-med)))
-    return {"available":True,"count":len(clean),"median":round(med,2),"mad":round(mad,2),"period":"Available historical observations"}
+    clean = [float(v) for v in values if v is not None]
+    if len(clean) < 5:
+        return {"available": False, "count": len(clean), "reason": "At least 5 historical observations are needed.", "median": None, "mad": None, "period": "Available history"}
+    med = float(statistics.median(clean))
+    mad = float(statistics.median([abs(x - med) for x in clean]))
+    return {"available": True, "count": len(clean), "median": round(med, 2), "mad": round(mad, 2), "period": "Available historical observations"}
 
 def detect(values):
     """Flag robust personal-baseline deviation or repeated directional movement."""

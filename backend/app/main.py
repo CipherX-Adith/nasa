@@ -163,10 +163,16 @@ def ask(data:Ask,db:Session=Depends(get_db),user=Depends(current_user)):
     key=os.getenv("GEMINI_API_KEY")
     if key:
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=key);model=genai.GenerativeModel("gemini-1.5-flash")
-            response=model.generate_content(f"You are a cautious astronaut health information assistant, not a clinician. Answer only from the evidence below; distinguish observations from interpretation; cite evidence; state what is missing. Do not diagnose, recommend treatment, or infer causation.\nEVIDENCE:\n{evidence}\nQUESTION: {data.question}")
-            return {"answer":response.text,"mode":"Gemini grounded","evidence":evidence[:5000]}
+            import httpx
+            prompt=f"You are a cautious astronaut health information assistant, not a clinician. Answer only from the evidence below; distinguish observations from interpretation; cite evidence; state what is missing. Do not diagnose, recommend treatment, or infer causation.\nEVIDENCE:\n{evidence}\nQUESTION: {data.question}"
+            resp=httpx.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}",
+                json={"contents": [{"parts": [{"text": prompt}]}]},
+                timeout=25.0
+            )
+            if resp.status_code == 200:
+                text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                return {"answer":text,"mode":"Gemini grounded","evidence":evidence[:5000]}
         except Exception: pass
     facts=[]
     for metric in re.findall(r"heart rate|HRV|sleep duration|fatigue|temperature|body mass|CO2|radiation",data.question,re.I):
