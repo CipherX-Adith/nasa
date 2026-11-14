@@ -84,6 +84,9 @@ export default function App() {
     fatigue: 2,
     symptoms: 'None reported',
   });
+  const [assessmentsList, setAssessmentsList] = useState<Any[]>([]);
+  const [behaviouralMetric, setBehaviouralMetric] = useState('Sleep Duration');
+  const [assessmentFeedback, setAssessmentFeedback] = useState('');
 
   // Login form controlled state for easy 1-click preset switching
   const [usernameInput, setUsernameInput] = useState('medical');
@@ -154,18 +157,20 @@ export default function App() {
       setSelected(id);
 
       if (id) {
-        const [m, b, l, t, d] = await Promise.all([
+        const [m, b, l, t, d, ass] = await Promise.all([
           api(`/astronauts/${id}/measurements`),
           api(`/astronauts/${id}/baselines`),
           api(`/alerts?astronaut_id=${id}`),
           api(`/timeline/${id}`),
           api(`/astronauts/${id}/documents`),
+          api(`/astronauts/${id}/assessments`),
         ]);
         setMeasurements(m);
         setBaselines(b);
         setAlerts(l);
         setTimeline(t);
         setDocs(d);
+        setAssessmentsList(ass || []);
       }
     } catch (e: any) {
       setError(e.message);
@@ -420,6 +425,160 @@ export default function App() {
     return null;
   };
 
+  // Dynamic Behavioral Data & Statistics
+  const latestAssessment = assessmentsList[assessmentsList.length - 1] || assessment;
+  const recentAssessments = assessmentsList.slice(-7);
+  const avgSleep7Days = recentAssessments.length
+    ? (recentAssessments.reduce((acc, curr) => acc + (curr.sleep_hours || 0), 0) / recentAssessments.length).toFixed(1)
+    : '7.5';
+
+  const behaviouralChartPoints = useMemo(() => {
+    if (!assessmentsList.length) {
+      return Array.from({ length: 60 }, (_, i) => ({
+        day: `D${i + 1}`,
+        dayNum: i + 1,
+        value: 7.5,
+        sleep_hours: 7.5,
+        fatigue: 2,
+        stress: 3,
+        mood: 7,
+        sleep_quality: 7,
+        symptoms: 'None reported',
+        isAnomaly: false,
+      }));
+    }
+
+    return assessmentsList.map((a: Any, idx: number) => {
+      let val = a.sleep_hours;
+      let isAnomaly = false;
+
+      if (behaviouralMetric === 'Fatigue') {
+        val = a.fatigue;
+        isAnomaly = a.fatigue >= 5;
+      } else if (behaviouralMetric === 'Stress') {
+        val = a.stress;
+        isAnomaly = a.stress >= 5;
+      } else if (behaviouralMetric === 'Mood') {
+        val = a.mood;
+        isAnomaly = a.mood <= 4;
+      } else if (behaviouralMetric === 'Sleep Quality') {
+        val = a.sleep_quality;
+        isAnomaly = a.sleep_quality <= 4;
+      } else {
+        val = a.sleep_hours;
+        isAnomaly = a.sleep_hours < 6.0;
+      }
+
+      return {
+        day: `D${idx + 1}`,
+        dayNum: idx + 1,
+        value: val,
+        sleep_hours: a.sleep_hours,
+        fatigue: a.fatigue,
+        stress: a.stress,
+        mood: a.mood,
+        sleep_quality: a.sleep_quality,
+        symptoms: a.symptoms,
+        timestamp: a.timestamp,
+        isAnomaly,
+      };
+    });
+  }, [assessmentsList, behaviouralMetric]);
+
+  const behaviouralMeta = useMemo(() => {
+    switch (behaviouralMetric) {
+      case 'Fatigue':
+        return {
+          unit: '/10',
+          targetLabel: 'Nominal threshold: <= 3/10',
+          baselineVal: 3.0,
+          color: '#ef4444',
+          yDomain: [0, 10],
+          yTicks: [0, 2, 4, 6, 8, 10],
+        };
+      case 'Stress':
+        return {
+          unit: '/10',
+          targetLabel: 'Operational limit: <= 4/10',
+          baselineVal: 3.0,
+          color: '#f59e0b',
+          yDomain: [0, 10],
+          yTicks: [0, 2, 4, 6, 8, 10],
+        };
+      case 'Mood':
+        return {
+          unit: '/10',
+          targetLabel: 'Nominal readiness: >= 7/10',
+          baselineVal: 7.0,
+          color: '#10b981',
+          yDomain: [0, 10],
+          yTicks: [0, 2, 4, 6, 8, 10],
+        };
+      case 'Sleep Quality':
+        return {
+          unit: '/10',
+          targetLabel: 'Restorative baseline: >= 7/10',
+          baselineVal: 7.0,
+          color: '#8b5cf6',
+          yDomain: [0, 10],
+          yTicks: [0, 2, 4, 6, 8, 10],
+        };
+      case 'Sleep Duration':
+      default:
+        return {
+          unit: 'hrs',
+          targetLabel: 'Target operational sleep: 7.0 – 8.5 hrs',
+          baselineVal: 7.5,
+          color: '#0284c7',
+          yDomain: [0, 10],
+          yTicks: [0, 2, 4, 6, 8, 10],
+        };
+    }
+  }, [behaviouralMetric]);
+
+  const BehaviouralDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (!payload || !payload.isAnomaly || cx === undefined || cy === undefined) {
+      return null;
+    }
+    return (
+      <circle
+        cx={cx}
+        cy={cy}
+        r={4.5}
+        fill="#ef4444"
+        stroke="#1e222d"
+        strokeWidth={1.5}
+      />
+    );
+  };
+
+  const CustomBehaviouralTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="telemetry-tooltip">
+          <div className="tooltip-day">Day {data.dayNum} {data.timestamp ? `· ${fmt(data.timestamp)}` : ''}</div>
+          <div className="tooltip-value">
+            {data.value} <span className="tooltip-unit">{behaviouralMeta.unit}</span>
+          </div>
+          <div className="tooltip-baseline" style={{ marginTop: '4px' }}>
+            Sleep: {data.sleep_hours} hrs (Quality: {data.sleep_quality}/10)
+          </div>
+          <div className="tooltip-baseline">
+            Fatigue: {data.fatigue}/10 · Stress: {data.stress}/10 · Mood: {data.mood}/10
+          </div>
+          {data.symptoms && data.symptoms !== 'None reported' && (
+            <div style={{ color: '#fca5a5', fontSize: '10px', marginTop: '4px', fontStyle: 'italic' }}>
+              &ldquo;{data.symptoms}&rdquo;
+            </div>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+
   // Reusable Telemetry Trend Card
   const renderTelemetryCard = () => (
     <section className="telemetry-card">
@@ -587,13 +746,8 @@ export default function App() {
 
         <section className="login-card">
           <div className="brand">
-            <div className="logo">
-              <Atom />
-            </div>
             <div>
-              <strong>
-                ORBITCARE <span>AI</span>
-              </strong>
+              <img className="brand-logo" src="/orbitcare-logo.png" alt="ORBITCARE AI" />
               <small>MISSION HEALTH INTELLIGENCE</small>
             </div>
           </div>
@@ -713,13 +867,8 @@ export default function App() {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="logo">
-            <Atom />
-          </div>
           <div>
-            <strong>
-              ORBITCARE <span>AI</span>
-            </strong>
+            <img className="brand-logo" src="/orbitcare-logo.png" alt="ORBITCARE AI" />
             <small>{isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'}</small>
           </div>
         </div>
@@ -1328,6 +1477,209 @@ export default function App() {
                 </div>
               </div>
 
+              {/* BEHAVIOURAL KPI STATS ROW */}
+              <div className="stats" style={{ marginBottom: '16px' }}>
+                <div className="stat">
+                  <div className="stat-top">
+                    <span>7-DAY AVG SLEEP</span>
+                    <Clock3 size={17} />
+                  </div>
+                  <strong>
+                    {avgSleep7Days} <small>hrs/night</small>
+                  </strong>
+                  <div className={`stat-foot ${+avgSleep7Days < 6.5 ? 'amber' : ''}`}>
+                    <i style={{ background: +avgSleep7Days < 6.5 ? '#f59e0b' : '#10b981' }} />
+                    {+avgSleep7Days < 6.5 ? 'Rest deficit detected' : 'Target: >= 7.0 hrs'}
+                  </div>
+                </div>
+
+                <div className="stat">
+                  <div className="stat-top">
+                    <span>FATIGUE INDEX</span>
+                    <Activity size={17} />
+                  </div>
+                  <strong>
+                    {latestAssessment.fatigue ?? 2} <small>/ 10</small>
+                  </strong>
+                  <div className={`stat-foot ${(latestAssessment.fatigue ?? 0) >= 5 ? 'amber' : ''}`}>
+                    <i style={{ background: (latestAssessment.fatigue ?? 0) >= 5 ? '#ef4444' : '#10b981' }} />
+                    {(latestAssessment.fatigue ?? 0) >= 5 ? 'Elevated cognitive strain' : 'Nominal operational level'}
+                  </div>
+                </div>
+
+                <div className="stat">
+                  <div className="stat-top">
+                    <span>STRESS & WORKLOAD</span>
+                    <Wind size={17} />
+                  </div>
+                  <strong>
+                    {latestAssessment.stress ?? 3} <small>/ 10</small>
+                  </strong>
+                  <div className="stat-foot">
+                    <i /> Operational limit: &lt;= 5/10
+                  </div>
+                </div>
+
+                <div className="stat">
+                  <div className="stat-top">
+                    <span>READINESS & MOOD</span>
+                    <Check size={17} />
+                  </div>
+                  <strong>
+                    {latestAssessment.mood ?? 7} <small>/ 10</small>
+                  </strong>
+                  <div className="stat-foot">
+                    <i /> Self-reported readiness
+                  </div>
+                </div>
+              </div>
+
+              {/* DYNAMIC NEUROCOGNITIVE & SLEEP TREND CHART */}
+              <section className="telemetry-card" style={{ marginBottom: '16px' }}>
+                <div className="telemetry-head">
+                  <div className="telemetry-head-left">
+                    <div className="telemetry-title-row">
+                      <h2>Neurocognitive & Sleep Adaptation Trend</h2>
+                      <span className="telemetry-badge">
+                        60-Day Longitudinal Self-Reports
+                      </span>
+                    </div>
+                    <p className="telemetry-subtitle">
+                      Tracking {behaviouralMetric} for {astronaut?.name || 'astronaut'} · {behaviouralMeta.targetLabel}
+                    </p>
+                  </div>
+
+                  <div className="telemetry-pills">
+                    {['Sleep Duration', 'Fatigue', 'Stress', 'Mood', 'Sleep Quality'].map((m) => (
+                      <button
+                        key={m}
+                        className={`telemetry-pill-btn ${
+                          behaviouralMetric === m ? 'active' : ''
+                        }`}
+                        onClick={() => setBehaviouralMetric(m)}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="telemetry-chart-container">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={behaviouralChartPoints}
+                      margin={{ top: 15, right: 25, left: 0, bottom: 5 }}
+                    >
+                      <defs>
+                        <linearGradient
+                          id="behaviouralFill"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="0%"
+                            stopColor={behaviouralMeta.color}
+                            stopOpacity={0.22}
+                          />
+                          <stop
+                            offset="85%"
+                            stopColor={behaviouralMeta.color}
+                            stopOpacity={0.04}
+                          />
+                          <stop
+                            offset="100%"
+                            stopColor="#ffffff"
+                            stopOpacity={0}
+                          />
+                        </linearGradient>
+                      </defs>
+
+                      <CartesianGrid vertical={false} horizontal={false} />
+
+                      <XAxis
+                        dataKey="day"
+                        ticks={['D1', 'D15', 'D30', 'D45', 'D60']}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{
+                          fill: '#94a3b8',
+                          fontSize: 11,
+                          fontFamily: "'DM Mono', monospace",
+                        }}
+                        dy={8}
+                      />
+
+                      <YAxis
+                        domain={behaviouralMeta.yDomain}
+                        ticks={behaviouralMeta.yTicks}
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{
+                          fill: '#94a3b8',
+                          fontSize: 11,
+                          fontFamily: "'DM Mono', monospace",
+                        }}
+                        dx={-5}
+                      />
+
+                      <ReferenceLine
+                        y={behaviouralMeta.baselineVal}
+                        stroke={behaviouralMeta.color}
+                        strokeDasharray="4 4"
+                        strokeOpacity={0.7}
+                      />
+
+                      <Tooltip content={<CustomBehaviouralTooltip />} />
+
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke={behaviouralMeta.color}
+                        strokeWidth={2}
+                        fill="url(#behaviouralFill)"
+                        dot={<BehaviouralDot />}
+                        activeDot={{
+                          r: 5,
+                          fill: behaviouralMeta.color,
+                          stroke: '#ffffff',
+                          strokeWidth: 2,
+                        }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="telemetry-foot">
+                  <div className="telemetry-legend">
+                    <span className="legend-item">
+                      <span
+                        className="legend-line"
+                        style={{ background: behaviouralMeta.color }}
+                      />
+                      <span>Reported {behaviouralMetric}</span>
+                    </span>
+                    <span className="legend-item">
+                      <span
+                        className="legend-line dashed"
+                        style={{ borderColor: behaviouralMeta.color }}
+                      />
+                      <span>{behaviouralMeta.targetLabel}</span>
+                    </span>
+                    <span className="legend-item">
+                      <span className="legend-dot-red" />
+                      <span>Elevated Strain / Alert</span>
+                    </span>
+                  </div>
+
+                  <div className="telemetry-window-note">
+                    Mission Timeline: D1–D60 ({assessmentsList.length} logs recorded)
+                  </div>
+                </div>
+              </section>
+
+              {/* DAILY SELF-REPORT LOGGING FORM */}
               <section className="panel table-panel">
                 <div className="panel-head">
                   <div>
@@ -1338,11 +1690,32 @@ export default function App() {
                         : 'Log daily health assessment'}
                     </h2>
                     <p className="muted">
-                      Manual assessment values are self-reported, not instrument
-                      measurements.
+                      Manual assessment values are self-reported and instantly update your neurocognitive trend above.
                     </p>
                   </div>
                 </div>
+
+                {assessmentFeedback && (
+                  <div
+                    style={{
+                      background: '#ecfdf5',
+                      border: '1px solid #a7f3d0',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      margin: '14px 24px 0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      color: '#065f46',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    <Check size={16} color="#059669" />
+                    <span>{assessmentFeedback}</span>
+                  </div>
+                )}
+
                 <div className="assessment-form">
                   {[
                     ['sleep_hours', 'Sleep duration (hours)', 0, 24],
@@ -1378,21 +1751,94 @@ export default function App() {
                           symptoms: e.target.value,
                         })
                       }
+                      placeholder="e.g. Mild headache, elevated fatigue after EVA"
                     />
                   </label>
                   <button
+                    disabled={busy}
                     onClick={async () => {
                       if (selected) {
-                        await api(`/astronauts/${selected}/assessments`, {
-                          method: 'POST',
-                          body: JSON.stringify(assessment),
-                        });
-                        load();
+                        setBusy(true);
+                        try {
+                          await api(`/astronauts/${selected}/assessments`, {
+                            method: 'POST',
+                            body: JSON.stringify(assessment),
+                          });
+                          setAssessmentFeedback(
+                            `Assessment successfully logged for Mission Day ${assessmentsList.length + 1}!`
+                          );
+                          setTimeout(() => setAssessmentFeedback(''), 5000);
+                          await load();
+                        } catch (err: any) {
+                          setError(err.message);
+                        } finally {
+                          setBusy(false);
+                        }
                       }
                     }}
                   >
-                    <Plus size={15} /> Submit assessment
+                    <Plus size={15} /> {busy ? 'Submitting…' : 'Submit assessment'}
                   </button>
+                </div>
+              </section>
+
+              {/* RECENT HISTORICAL ASSESSMENT LOG TABLE */}
+              <section className="panel table-panel" style={{ marginTop: '16px' }}>
+                <div className="panel-head">
+                  <div>
+                    <div className="eyebrow">CHRONOLOGICAL ASSESSMENT LOGS</div>
+                    <h2>Recent Daily Records · {astronaut?.name}</h2>
+                    <p className="muted">
+                      Chronological history of self-reported neurocognitive scores, sleep, and symptoms.
+                    </p>
+                  </div>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Mission Day</th>
+                        <th>Recorded Date</th>
+                        <th>Sleep</th>
+                        <th>Quality</th>
+                        <th>Fatigue</th>
+                        <th>Stress</th>
+                        <th>Mood</th>
+                        <th>Reported Symptoms</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assessmentsList.slice(-12).reverse().map((a: Any, i: number) => {
+                        const dayIndex = assessmentsList.length - i;
+                        return (
+                          <tr key={a.id || i}>
+                            <td>
+                              <span className="type-pill assessment">
+                                Day {dayIndex}
+                              </span>
+                            </td>
+                            <td>{fmt(a.timestamp)}</td>
+                            <td>
+                              <b>{a.sleep_hours}</b> hrs
+                            </td>
+                            <td>{a.sleep_quality} / 10</td>
+                            <td>
+                              <span
+                                className={`priority ${
+                                  a.fatigue >= 5 ? 'high-text' : ''
+                                }`}
+                              >
+                                {a.fatigue} / 10
+                              </span>
+                            </td>
+                            <td>{a.stress} / 10</td>
+                            <td>{a.mood} / 10</td>
+                            <td>{a.symptoms || 'No symptoms reported'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </section>
             </>

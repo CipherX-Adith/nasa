@@ -197,6 +197,12 @@ button {
   color: var(--text-muted);
   margin-top: 3px;
 }
+.brand-logo {
+  display: block;
+  width: 190px;
+  max-width: 100%;
+  height: auto;
+}
 
 .logo {
   width: 34px;
@@ -1610,6 +1616,9 @@ td {
 
 .login-card .brand {
   padding: 0;
+}
+.login-card .brand-logo {
+  width: 270px;
 }
 
 .login-card .eyebrow {
