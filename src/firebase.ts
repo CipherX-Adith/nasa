@@ -27,20 +27,25 @@ export interface FirebaseConfig {
 
 const STORAGE_KEY = 'orbitcare_firebase_config';
 
-// User's project configuration
-export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
-  apiKey: "AIzaSyArHxBEYICb6nWLJA9sa-QRwJsz7lSNBwI",
-  authDomain: "orbitcare-afcc9.firebaseapp.com",
-  databaseURL: "https://orbitcare-afcc9-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "orbitcare-afcc9",
-  storageBucket: "orbitcare-afcc9.firebasestorage.app",
-  messagingSenderId: "869455531572",
-  appId: "1:869455531572:web:21bf4a38ced2d2e4784461",
-  measurementId: "G-Q2NZ2ZQWWE"
-};
+// Firebase configuration loaded securely from environment variables
+export function getSavedFirebaseConfig(): FirebaseConfig | null {
+  // 1. Read from Vite environment variables (.env locally or Vercel Environment Variables in production)
+  const envKey = import.meta.env.VITE_FIREBASE_API_KEY;
+  const envProject = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+  if (envKey && envProject) {
+    return {
+      apiKey: envKey,
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || `${envProject}.firebaseapp.com`,
+      databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || `https://${envProject}-default-rtdb.asia-southeast1.firebasedatabase.app`,
+      projectId: envProject,
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || `${envProject}.firebasestorage.app`,
+      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+      appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+      measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
+    };
+  }
 
-export function getSavedFirebaseConfig(): FirebaseConfig {
-  // 1. Check localStorage first
+  // 2. Fall back to cached configuration in localStorage if present
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -51,24 +56,7 @@ export function getSavedFirebaseConfig(): FirebaseConfig {
     }
   } catch {}
 
-  // 2. Check Vite environment variables
-  const envKey = import.meta.env.VITE_FIREBASE_API_KEY;
-  const envProject = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-  if (envKey && envProject) {
-    return {
-      apiKey: envKey,
-      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || `${envProject}.firebaseapp.com`,
-      databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || DEFAULT_FIREBASE_CONFIG.databaseURL,
-      projectId: envProject,
-      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || `${envProject}.firebasestorage.app`,
-      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-      appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
-      measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
-    };
-  }
-
-  // 3. Fallback to embedded default configuration
-  return DEFAULT_FIREBASE_CONFIG;
+  return null;
 }
 
 export function saveFirebaseConfig(cfg: FirebaseConfig) {
