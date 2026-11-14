@@ -1,4 +1,4 @@
-import os, re, random
+import os, re, random, json, urllib.request
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +9,6 @@ from .db import Base, engine, get_db
 from .models import User, Astronaut, Measurement, Alert, Assessment, MedicalRecord, MedicalDocument, MedicalObservation
 from .core import verify_password, hash_password, make_token, read_token
 from .intelligence import baseline, detect
-from .seed import seed
 
 app = FastAPI(title="ORBITCARE", version="1.0.0")
 app.add_middleware(
@@ -50,57 +49,186 @@ def ensure_schema():
 ensure_schema()
 Base.metadata.create_all(bind=engine)
 
-def seed_medical_records(db: Session):
-    if db.query(MedicalRecord).count():
-        return
-    records = [
-        MedicalRecord(
-            astronaut_id=1,
-            record_type="Clinical Evaluation",
-            title="Pre-Flight Cardiopulmonary & Neurovestibular Clearance",
-            physician="Dr. Robert Vance, Flight Surgeon",
-            findings="Normal sinus rhythm (resting HR 65 bpm, BP 118/76 mmHg). VO2 max 54 mL/kg/min. Sensorimotor and vestibular function optimal. Cleared for long-duration Asteria-7 orbital flight.",
-            countermeasures="Prescribed continuous cycle ergometer countermeasure (45 min/day, 75% VO2 max) + ARED resistance protocol.",
-            status="Signed & Verified",
-            date="2026-09-15"
-        ),
-        MedicalRecord(
-            astronaut_id=1,
-            record_type="Countermeasure Prescription",
-            title="Day 48 Sub-acute Fatigue & Circadian Re-alignment Protocol",
-            physician="Dr. Robert Vance, Flight Surgeon",
-            findings="Resting heart rate drift (+6.2 bpm above 30-day baseline) and reported sleep fragmentation following 3 consecutive EVA operations. Mild orthostatic deceleration post-exercise.",
-            countermeasures="1. Melatonin 0.5 mg PO 30 min before target sleep period. 2. 400 lux blue-enriched light exposure during first 2 hours of flight shift. 3. 1.2L isotonic fluid loading prior to next EVA.",
-            status="Active",
-            date="2026-11-02"
-        ),
-        MedicalRecord(
-            astronaut_id=2,
-            record_type="Clinical Evaluation",
-            title="Orbital Musculoskeletal & Bone Mineral Density Review",
-            physician="Dr. Robert Vance, Flight Surgeon",
-            findings="Full grip strength preserved (48.2 kg). Lumbar spine and femoral neck load resistance compliant with ARED mission targets. No acute issues reported.",
-            countermeasures="Maintain target resistive exercise load at 110% body weight equivalent.",
-            status="Signed & Verified",
-            date="2026-10-20"
-        ),
-        MedicalRecord(
-            astronaut_id=3,
-            record_type="Radiation Dosimetry",
-            title="Cumulative 60-Day Mission Radiation Dosimetry Assessment",
-            physician="Dr. Aris Thorne, Mission Radiation Health Officer",
-            findings="Cumulative active dosimeter reading: 25.2 mSv. Average daily dose rate: 0.42 mSv/day. All values within NASA Space Flight Limits for LEO. Peripheral lymphocyte count normal.",
-            countermeasures="Standard radiation badge monitoring continued; shelter protocol available if solar flare occurs.",
-            status="Signed & Verified",
-            date="2026-11-10"
-        ),
-    ]
-    db.add_all(records)
-    db.commit()
+FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "https://orbitcare-afcc9-default-rtdb.asia-southeast1.firebasedatabase.app")
+
+def fb_request(path: str, data: dict | list | None = None, method: str = "GET"):
+    url = f"{FIREBASE_DATABASE_URL.rstrip('/')}/{path.lstrip('/')}.json"
+    req_data = json.dumps(data).encode("utf-8") if data is not None else None
+    headers = {"Content-Type": "application/json"} if data is not None else {}
+    req = urllib.request.Request(url, data=req_data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            content = resp.read().decode("utf-8")
+            return json.loads(content) if content else None
+    except Exception as e:
+        print(f"Firebase {method} {path} note:", e)
+        return None
+
+def sync_from_firebase(db: Session):
+    try:
+        # 1. Astronauts from Firebase
+        astros_data = fb_request("astronauts")
+        if astros_data:
+            items = astros_data if isinstance(astros_data, list) else list(astros_data.values())
+            for item in items:
+                if not item or not isinstance(item, dict):
+                    continue
+                aid = item.get("id")
+                if aid and not db.get(Astronaut, aid):
+                    db.add(Astronaut(
+                        id=aid,
+                        name=item.get("name", "Astronaut"),
+                        call_sign=item.get("call_sign", ""),
+                        mission=item.get("mission", "Asteria-7"),
+                        status=item.get("status", "Active"),
+                        simulated=item.get("simulated", False),
+                    ))
+            db.commit()
+
+        # 2. Users from Firebase
+        users_data = fb_request("users")
+        if users_data:
+            items = users_data.values() if isinstance(users_data, dict) else users_data
+            for u in items:
+                if not u or not isinstance(u, dict):
+                    continue
+                uname = u.get("username")
+                if not uname:
+                    continue
+                if not db.query(User).filter_by(username=uname).first():
+                    db.add(User(
+                        username=uname,
+                        password_hash=u.get("password_hash") or hash_password(u.get("password", "orbitcare-demo")),
+                        role=u.get("role", "astronaut"),
+                        status=u.get("status", "approved"),
+                        full_name=u.get("full_name") or u.get("name") or uname.title(),
+                        call_sign=u.get("call_sign", ""),
+                        mission=u.get("mission", "Asteria-7"),
+                        specialization=u.get("specialization", "Flight Crew"),
+                        astronaut_id=u.get("astronaut_id"),
+                    ))
+            db.commit()
+
+        # 3. Measurements from Firebase
+        meas_data = fb_request("measurements")
+        if meas_data:
+            groups = meas_data.values() if isinstance(meas_data, dict) else meas_data
+            for group in groups:
+                if not group:
+                    continue
+                items = group.values() if isinstance(group, dict) else group
+                for m in items:
+                    if not m or not isinstance(m, dict):
+                        continue
+                    mid = m.get("id")
+                    int_mid = int(mid) if str(mid).isdigit() else None
+                    if int_mid and not db.get(Measurement, int_mid):
+                        ts_str = m.get("timestamp")
+                        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00")) if ts_str else datetime.now(timezone.utc)
+                        db.add(Measurement(
+                            id=int_mid,
+                            astronaut_id=m.get("astronaut_id"),
+                            domain=m.get("domain", "cardiovascular"),
+                            metric=m.get("metric", "Resting heart rate"),
+                            value=float(m.get("value", 0)),
+                            unit=m.get("unit", "bpm"),
+                            timestamp=ts,
+                            source=m.get("source", "Telemetry downlink"),
+                            quality=m.get("quality", "good"),
+                            simulated=m.get("simulated", False),
+                        ))
+            db.commit()
+
+        # 4. Assessments from Firebase
+        ass_data = fb_request("assessments")
+        if ass_data:
+            groups = ass_data.values() if isinstance(ass_data, dict) else ass_data
+            for group in groups:
+                if not group:
+                    continue
+                items = group.values() if isinstance(group, dict) else group
+                for a in items:
+                    if not a or not isinstance(a, dict):
+                        continue
+                    aid_ass = a.get("id")
+                    int_id = int(aid_ass) if str(aid_ass).isdigit() else None
+                    if int_id and not db.get(Assessment, int_id):
+                        ts_str = a.get("timestamp")
+                        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00")) if ts_str else datetime.now(timezone.utc)
+                        db.add(Assessment(
+                            id=int_id,
+                            astronaut_id=a.get("astronaut_id"),
+                            sleep_hours=float(a.get("sleep_hours", 7.5)),
+                            sleep_quality=int(a.get("sleep_quality", 7)),
+                            stress=int(a.get("stress", 3)),
+                            mood=int(a.get("mood", 7)),
+                            fatigue=int(a.get("fatigue", 2)),
+                            symptoms=a.get("symptoms", "None reported"),
+                            timestamp=ts,
+                            source=a.get("source", "Astronaut self-report"),
+                            simulated=a.get("simulated", False),
+                        ))
+            db.commit()
+
+        # 5. Medical Records from Firebase
+        mr_data = fb_request("medical_records")
+        if mr_data:
+            groups = mr_data.values() if isinstance(mr_data, dict) else mr_data
+            for group in groups:
+                if not group:
+                    continue
+                items = group.values() if isinstance(group, dict) else group
+                for r in items:
+                    if not r or not isinstance(r, dict):
+                        continue
+                    rid = r.get("id")
+                    int_rid = int(rid) if str(rid).isdigit() else None
+                    if int_rid and not db.get(MedicalRecord, int_rid):
+                        ts_str = r.get("timestamp")
+                        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00")) if ts_str else datetime.now(timezone.utc)
+                        db.add(MedicalRecord(
+                            id=int_rid,
+                            astronaut_id=r.get("astronaut_id"),
+                            record_type=r.get("record_type", "Clinical Evaluation"),
+                            title=r.get("title", "Evaluation"),
+                            physician=r.get("physician", "Flight Surgeon"),
+                            findings=r.get("findings", ""),
+                            countermeasures=r.get("countermeasures", ""),
+                            status=r.get("status", "Signed & Verified"),
+                            date=r.get("date", ""),
+                            timestamp=ts,
+                        ))
+            db.commit()
+
+        # 6. Alerts from Firebase
+        alerts_data = fb_request("alerts")
+        if alerts_data:
+            items = alerts_data.values() if isinstance(alerts_data, dict) else alerts_data
+            for alt in items:
+                if not alt or not isinstance(alt, dict):
+                    continue
+                alt_id = alt.get("id")
+                int_alt = int(alt_id) if str(alt_id).isdigit() else None
+                if int_alt and not db.get(Alert, int_alt):
+                    ts_str = alt.get("created_at")
+                    ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00")) if ts_str else datetime.now(timezone.utc)
+                    db.add(Alert(
+                        id=int_alt,
+                        astronaut_id=alt.get("astronaut_id"),
+                        measurement_id=alt.get("measurement_id"),
+                        metric=alt.get("metric", "Resting heart rate"),
+                        priority=alt.get("priority", "medium"),
+                        reason=alt.get("reason", ""),
+                        acknowledged=alt.get("acknowledged", False),
+                        follow_up=alt.get("follow_up"),
+                        created_at=ts,
+                    ))
+            db.commit()
+    except Exception as e:
+        print("Firebase sync error:", e)
 
 with next(get_db()) as db:
-    seed(db)
-    seed_medical_records(db)
+    sync_from_firebase(db)
 
 def current_user(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -153,11 +281,12 @@ def seed_new_astronaut_baseline(db: Session, aid: int):
         ("radiation_environment", "Cabin CO2", "mmHg", 2.4),
         ("radiation_environment", "Radiation dose rate", "mSv/day", 0.41),
     ]
+    fb_meas = []
     for domain, metric, unit, base in metrics:
         for day_idx in range(1, 31):
             ts = now - timedelta(days=(30 - day_idx))
             val = round(base + random.uniform(-1.5, 1.5), 2)
-            db.add(Measurement(
+            m = Measurement(
                 astronaut_id=aid,
                 domain=domain,
                 metric=metric,
@@ -165,8 +294,20 @@ def seed_new_astronaut_baseline(db: Session, aid: int):
                 unit=unit,
                 timestamp=ts,
                 source="Initial flight baseline",
-                simulated=True
-            ))
+                simulated=False
+            )
+            db.add(m)
+            fb_meas.append({
+                "astronaut_id": aid,
+                "domain": domain,
+                "metric": metric,
+                "value": val,
+                "unit": unit,
+                "timestamp": ts.isoformat(),
+                "source": "Initial flight baseline",
+                "simulated": False
+            })
+    fb_ass = []
     for day_idx in range(1, 31):
         ts = now - timedelta(days=(30 - day_idx))
         db.add(Assessment(
@@ -179,9 +320,23 @@ def seed_new_astronaut_baseline(db: Session, aid: int):
             symptoms="Nominal pre-flight readiness",
             timestamp=ts,
             source="Pre-flight baseline assessment",
-            simulated=True
+            simulated=False
         ))
+        fb_ass.append({
+            "astronaut_id": aid,
+            "sleep_hours": 7.5,
+            "sleep_quality": 8,
+            "stress": 2,
+            "mood": 8,
+            "fatigue": 2,
+            "symptoms": "Nominal pre-flight readiness",
+            "timestamp": ts.isoformat(),
+            "source": "Pre-flight baseline assessment",
+            "simulated": False
+        })
     db.commit()
+    fb_request(f"measurements/{aid}", fb_meas, method="PUT")
+    fb_request(f"assessments/{aid}", fb_ass, method="PUT")
 
 class Login(BaseModel):
     username: str
@@ -271,6 +426,22 @@ def register(data: RegisterIn, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # Sync to Firebase Realtime Database
+    fb_request(f"users/{uname}", {
+        "id": user.id,
+        "username": user.username,
+        "password_hash": user.password_hash,
+        "role": user.role,
+        "status": user.status,
+        "full_name": user.full_name,
+        "call_sign": user.call_sign,
+        "mission": user.mission,
+        "specialization": user.specialization,
+        "astronaut_id": user.astronaut_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }, method="PUT")
+
     return {
         "status": "pending_approval",
         "username": user.username,
@@ -338,6 +509,7 @@ def approve_user(user_id: int, db: Session = Depends(get_db), admin = Depends(me
         raise HTTPException(404, "User not found")
     
     target_user.status = "approved"
+    astro = None
     
     # If no astronaut assigned, create a new Astronaut profile in the mission roster
     if not target_user.astronaut_id:
@@ -355,6 +527,33 @@ def approve_user(user_id: int, db: Session = Depends(get_db), admin = Depends(me
     
     db.commit()
     db.refresh(target_user)
+
+    # Sync to Firebase Realtime Database
+    fb_request(f"users/{target_user.username}", {
+        "id": target_user.id,
+        "username": target_user.username,
+        "password_hash": target_user.password_hash,
+        "role": target_user.role,
+        "status": target_user.status,
+        "full_name": target_user.full_name,
+        "call_sign": target_user.call_sign,
+        "mission": target_user.mission,
+        "specialization": target_user.specialization,
+        "astronaut_id": target_user.astronaut_id,
+        "approved_at": datetime.now(timezone.utc).isoformat(),
+        "approved_by": admin.username,
+    }, method="PUT")
+
+    if astro:
+        fb_request(f"astronauts/{astro.id}", {
+            "id": astro.id,
+            "name": astro.name,
+            "call_sign": astro.call_sign,
+            "mission": astro.mission,
+            "status": astro.status,
+            "simulated": astro.simulated,
+        }, method="PUT")
+
     return {
         "message": f"Astronaut account '{target_user.username}' approved and enlisted into flight roster.",
         "user_id": target_user.id,
@@ -369,6 +568,7 @@ def reject_user(user_id: int, db: Session = Depends(get_db), admin = Depends(med
         raise HTTPException(404, "User not found")
     target_user.status = "rejected"
     db.commit()
+    fb_request(f"users/{target_user.username}/status", "rejected", method="PUT")
     return {"message": f"User '{target_user.username}' rejected.", "status": "rejected"}
 
 @app.post("/api/admin/astronauts/create")
@@ -403,6 +603,21 @@ def direct_create_astronaut(data: DirectAstronautIn, db: Session = Depends(get_d
     
     seed_new_astronaut_baseline(db, astro.id)
     db.commit()
+
+    fb_request(f"astronauts/{astro.id}", serialize(astro), method="PUT")
+    fb_request(f"users/{user.username}", {
+        "id": user.id,
+        "username": user.username,
+        "password_hash": user.password_hash,
+        "role": user.role,
+        "status": user.status,
+        "full_name": user.full_name,
+        "call_sign": user.call_sign,
+        "mission": user.mission,
+        "specialization": user.specialization,
+        "astronaut_id": user.astronaut_id,
+        "approved_at": datetime.now(timezone.utc).isoformat(),
+    }, method="PUT")
     
     return {
         "message": f"Astronaut '{data.name}' created and cleared for flight.",
@@ -450,6 +665,18 @@ def add_measurement(aid: int, data: MeasurementIn, db: Session = Depends(get_db)
     db.add(x)
     db.commit()
     db.refresh(x)
+    fb_request(f"measurements/{aid}/{x.id}", {
+        "id": x.id,
+        "astronaut_id": x.astronaut_id,
+        "domain": x.domain,
+        "metric": x.metric,
+        "value": x.value,
+        "unit": x.unit,
+        "timestamp": x.timestamp.isoformat(),
+        "source": x.source,
+        "quality": x.quality,
+        "simulated": x.simulated,
+    }, method="PUT")
     refresh_alerts(db)
     return serialize(x)
 
@@ -475,6 +702,18 @@ def live_telemetry_tick(aid: int, db: Session = Depends(get_db), user = Depends(
     db.add(x)
     db.commit()
     db.refresh(x)
+    fb_request(f"measurements/{aid}/{x.id}", {
+        "id": x.id,
+        "astronaut_id": x.astronaut_id,
+        "domain": x.domain,
+        "metric": x.metric,
+        "value": x.value,
+        "unit": x.unit,
+        "timestamp": x.timestamp.isoformat(),
+        "source": x.source,
+        "quality": "good",
+        "simulated": False,
+    }, method="PUT")
     refresh_alerts(db)
     return serialize(x)
 
@@ -501,6 +740,19 @@ def add_assessment(aid: int, data: AssessmentIn, db: Session = Depends(get_db), 
     db.add(x)
     db.commit()
     db.refresh(x)
+    fb_request(f"assessments/{aid}/{x.id}", {
+        "id": x.id,
+        "astronaut_id": x.astronaut_id,
+        "sleep_hours": x.sleep_hours,
+        "sleep_quality": x.sleep_quality,
+        "stress": x.stress,
+        "mood": x.mood,
+        "fatigue": x.fatigue,
+        "symptoms": x.symptoms,
+        "timestamp": x.timestamp.isoformat(),
+        "source": x.source,
+        "simulated": x.simulated,
+    }, method="PUT")
     return serialize(x)
 
 # ----------------- MEDICAL RECORDS & CLINICAL EVALUATIONS -----------------
@@ -527,6 +779,18 @@ def add_medical_record(aid: int, data: MedicalRecordIn, db: Session = Depends(ge
     db.add(rec)
     db.commit()
     db.refresh(rec)
+    fb_request(f"medical_records/{aid}/{rec.id}", {
+        "id": rec.id,
+        "astronaut_id": rec.astronaut_id,
+        "record_type": rec.record_type,
+        "title": rec.title,
+        "physician": rec.physician,
+        "findings": rec.findings,
+        "countermeasures": rec.countermeasures,
+        "status": rec.status,
+        "date": rec.date,
+        "timestamp": rec.timestamp.isoformat(),
+    }, method="PUT")
     return serialize(rec)
 
 # ----------------- ALERTS & PROTOCOLS -----------------
@@ -550,6 +814,12 @@ def acknowledge(alert_id: int, data: Followup, db: Session = Depends(get_db), us
     a.acknowledged_by = user.username
     a.follow_up = data.note
     db.commit()
+    fb_request(f"alerts/{alert_id}", {
+        "acknowledged": True,
+        "acknowledged_by": a.acknowledged_by,
+        "follow_up": a.follow_up,
+        "acknowledged_at": datetime.now(timezone.utc).isoformat(),
+    }, method="PATCH")
     return serialize(a)
 
 # ----------------- MEDICAL DOCUMENTS & PDF OCR -----------------

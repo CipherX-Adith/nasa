@@ -48,6 +48,16 @@ import {
   firebaseDirectCreateAstronaut,
   subscribeToMedicalRecords,
   saveMedicalRecordToFirebase,
+  firebaseGetAstronauts,
+  subscribeToAstronauts,
+  firebaseGetMeasurements,
+  subscribeToMeasurements,
+  firebaseGetAssessments,
+  firebaseGetMedicalRecords,
+  firebaseGetAlerts,
+  subscribeToAlerts,
+  firebaseAcknowledgeAlert,
+  firebaseGetUsers,
   type FirebaseUserRecord,
   type FirebaseMedicalRecord,
 } from './firebase';
@@ -423,52 +433,77 @@ export default function App() {
   async function load() {
     if (!token) return;
     try {
-      const a = await api('/astronauts');
-      setAstronauts(a);
-      // For regular user, strictly lock ID to their assigned astronaut_id
+      // 1. Fetch Astronauts directly from Firebase Cloud Database
+      let a = await firebaseGetAstronauts();
+      if (!a || !a.length) {
+        a = await api('/astronauts').catch(() => []);
+      }
+      if (a && a.length) {
+        setAstronauts(a);
+      }
+
       const id = (user?.role !== 'medical' && user?.astronaut_id)
         ? user.astronaut_id
-        : (selected || a[0]?.id);
+        : (selected || a[0]?.id || 1);
 
       setSelected(id);
 
       if (id) {
-        const [m, b, l, t, d, ass, recs] = await Promise.all([
-          api(`/astronauts/${id}/measurements`),
-          api(`/astronauts/${id}/baselines`),
-          api(`/alerts?astronaut_id=${id}`),
-          api(`/timeline/${id}`),
-          api(`/astronauts/${id}/documents`),
-          api(`/astronauts/${id}/assessments`),
-          api(`/astronauts/${id}/medical-records`).catch(() => []),
+        // 2. Fetch Measurements, Assessments, Medical Records, Alerts directly from Firebase
+        const [fbMeas, fbAss, fbRecs, fbAlerts] = await Promise.all([
+          firebaseGetMeasurements(id),
+          firebaseGetAssessments(id),
+          firebaseGetMedicalRecords(id),
+          firebaseGetAlerts(id),
         ]);
-        setMeasurements(m);
-        setBaselines(b);
-        setAlerts(l);
-        setTimeline(t);
-        setDocs(d);
-        if (Array.isArray(recs)) {
-          setMedicalRecords(recs);
+
+        if (fbMeas && fbMeas.length) {
+          setMeasurements(fbMeas);
+          setPacketCount(fbMeas.length);
+        } else {
+          const m = await api(`/astronauts/${id}/measurements`).catch(() => []);
+          if (m && m.length) {
+            setMeasurements(m);
+            setPacketCount(m.length);
+          }
         }
 
-        // Merge server assessments with locally stored assessments (resilient across serverless containers)
-        let mergedAss = Array.isArray(ass) ? [...ass] : [];
-        try {
-          const stored = JSON.parse(localStorage.getItem(`orbitcare_assessments_${id}`) || '[]');
-          for (const item of stored) {
-            const exists = mergedAss.some(
-              (x: Any) => x.id === item.id || (x.timestamp === item.timestamp && x.symptoms === item.symptoms)
-            );
-            if (!exists) {
-              mergedAss.push(item);
-            }
-          }
-        } catch {}
-        mergedAss.sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
-        setAssessmentsList(mergedAss);
+        if (fbAss && fbAss.length) {
+          setAssessmentsList(fbAss);
+        } else {
+          const ass = await api(`/astronauts/${id}/assessments`).catch(() => []);
+          if (ass && ass.length) setAssessmentsList(ass);
+        }
+
+        if (fbRecs && fbRecs.length) {
+          setMedicalRecords(fbRecs);
+        } else {
+          const recs = await api(`/astronauts/${id}/medical-records`).catch(() => []);
+          if (recs && recs.length) setMedicalRecords(recs);
+        }
+
+        if (fbAlerts && fbAlerts.length) {
+          setAlerts(fbAlerts);
+        } else {
+          const l = await api(`/alerts?astronaut_id=${id}`).catch(() => []);
+          if (l && l.length) setAlerts(l);
+        }
+
+        const [b, t, d] = await Promise.all([
+          api(`/astronauts/${id}/baselines`).catch(() => []),
+          api(`/timeline/${id}`).catch(() => []),
+          api(`/astronauts/${id}/documents`).catch(() => []),
+        ]);
+        if (b && b.length) setBaselines(b);
+        if (t && t.length) setTimeline(t);
+        if (d && d.length) setDocs(d);
       }
 
-      if (user?.role === 'medical') {
+      // Load all registered users from Firebase
+      const u = await firebaseGetUsers();
+      if (u && u.length) {
+        setSystemUsers(u);
+      } else if (user?.role === 'medical') {
         loadAdminUsers();
       }
     } catch (e: any) {
@@ -476,11 +511,77 @@ export default function App() {
     }
   }
 
+  // Pre-load users on mount for dynamic role presets
+  useEffect(() => {
+    firebaseGetUsers().then((u) => {
+      if (u && u.length) setSystemUsers(u);
+    });
+  }, []);
+
+  // Firebase Real-time Astronauts Subscription
+  useEffect(() => {
+    if (!firebaseActive) return;
+    const unsub = subscribeToAstronauts((fbA) => {
+      if (fbA && fbA.length) setAstronauts(fbA);
+    });
+    return () => unsub();
+  }, [firebaseActive]);
+
+  const astronaut = astronauts.find((a: Any) => a.id === selected) || astronauts[0];
+
+  // Firebase Real-time Measurements Subscription
+  useEffect(() => {
+    const aid =
+      user?.role !== 'medical' && user?.astronaut_id
+        ? user.astronaut_id
+        : selected || astronaut?.id || astronauts[0]?.id || 1;
+    if (!aid || !firebaseActive) return;
+
+    const unsub = subscribeToMeasurements(aid, (fbM) => {
+      if (fbM && fbM.length) {
+        setMeasurements(fbM);
+        setPacketCount(fbM.length);
+      }
+    });
+    return () => unsub();
+  }, [selected, user, astronaut, astronauts, firebaseActive]);
+
+  // Firebase Real-time Alerts Subscription
+  useEffect(() => {
+    if (!firebaseActive) return;
+    const unsub = subscribeToAlerts((fbL) => {
+      if (fbL && fbL.length) setAlerts(fbL);
+    });
+    return () => unsub();
+  }, [firebaseActive]);
+
+  // Firebase Real-time Users Subscription
+  useEffect(() => {
+    if (!firebaseActive) return;
+    const unsub = subscribeToFirebaseUsers((fbU) => {
+      if (fbU && fbU.length) setSystemUsers(fbU);
+    });
+    return () => unsub();
+  }, [firebaseActive]);
+
+  // Firebase Real-time Medical Records Subscription
+  useEffect(() => {
+    const aid =
+      user?.role !== 'medical' && user?.astronaut_id
+        ? user.astronaut_id
+        : selected || astronaut?.id || astronauts[0]?.id || 1;
+    if (!aid || !firebaseActive) return;
+
+    const unsub = subscribeToMedicalRecords(aid, (fbR) => {
+      if (fbR && fbR.length) setMedicalRecords(fbR);
+    });
+    return () => unsub();
+  }, [selected, user, astronaut, astronauts, firebaseActive]);
+
   useEffect(() => {
     load();
   }, [token, selected]);
 
-  const astronaut = astronauts.find((a: Any) => a.id === selected) || astronauts[0];
   const metrics = useMemo(
     () => Array.from(new Set(measurements.map((x: Any) => x.metric))),
     [measurements]
@@ -748,18 +849,18 @@ export default function App() {
       return {
         points: [],
         unit: 'BPM',
-        median: 65.4,
-        upper: 68.07,
-        lower: 62.73,
-        domain: [58, 86] as [number, number],
-        ticks: [60, 66, 72, 78, 84],
+        median: 0,
+        upper: 0,
+        lower: 0,
+        domain: [0, 100] as [number, number],
+        ticks: [0, 25, 50, 75, 100],
       };
     }
 
     const rawUnit = filtered[0].unit;
     const unit = rawUnit === 'bpm' ? 'BPM' : rawUnit;
 
-    // First 30 days as rolling calibration window (D1-D30)
+    // Rolling calibration window from the first 30 readings or available data
     const calSlice = filtered.length >= 30 ? filtered.slice(0, 30) : filtered;
     const calValues = calSlice.map((m: Any) => Number(m.value)).sort((a: number, b: number) => a - b);
     const mid = Math.floor(calValues.length / 2);
@@ -774,20 +875,10 @@ export default function App() {
         ? (diffs[mid - 1] + diffs[mid]) / 2
         : diffs[mid];
 
-    let median: number;
-    let lower: number;
-    let upper: number;
-
-    if (selectedMetric === 'Heart Rate' && (selected === 1 || !selected)) {
-      median = 65.4;
-      lower = 62.73;
-      upper = 68.07;
-    } else {
-      median = Number(calculatedMedian.toFixed(1));
-      const scale = Math.max(1.4826 * (calculatedMad || 1.2), Math.abs(median) * 0.04, 0.2);
-      lower = Number((median - scale).toFixed(2));
-      upper = Number((median + scale).toFixed(2));
-    }
+    const median = Number(calculatedMedian.toFixed(1));
+    const scale = Math.max(1.4826 * (calculatedMad || 1.2), Math.abs(median) * 0.04, 0.2);
+    const lower = Number((median - scale).toFixed(2));
+    const upper = Number((median + scale).toFixed(2));
 
     const points = filtered.map((m: Any, idx: number) => {
       const dayNum = idx + 1;
@@ -805,49 +896,30 @@ export default function App() {
       };
     });
 
+    const allVals = points.map((p: any) => p.value);
+    const minVal = Math.min(...allVals, lower);
+    const maxVal = Math.max(...allVals, upper);
+    const span = maxVal - minVal;
+    const pad = span > 0 ? span * 0.15 : Math.max(Math.abs(minVal) * 0.1, 1);
+    const rawLow = minVal - pad;
+    const rawHigh = maxVal + pad;
+    const isDecimal = ['Core Temp', 'Cabin CO2', 'Radiation dose rate'].includes(selectedMetric) || span < 5;
+
     let yDomain: [number, number];
     let yTicks: number[];
 
-    if (selectedMetric === 'Heart Rate') {
-      yDomain = [58, 86];
-      yTicks = [60, 66, 72, 78, 84];
-    } else if (selectedMetric === 'HRV') {
-      yDomain = [35, 75];
-      yTicks = [40, 48, 56, 64, 72];
-    } else if (selectedMetric === 'Systolic BP') {
-      yDomain = [108, 142];
-      yTicks = [112, 118, 124, 130, 136];
-    } else if (selectedMetric === 'Core Temp') {
-      yDomain = [36.0, 37.8];
-      yTicks = [36.2, 36.6, 37.0, 37.4];
-    } else if (selectedMetric === 'Grip') {
-      yDomain = [34, 54];
-      yTicks = [36, 40, 44, 48, 52];
-    } else if (selectedMetric === 'Sleep duration') {
-      yDomain = [3.5, 9.0];
-      yTicks = [4, 5, 6, 7, 8];
-    } else if (['Fatigue', 'Sleep quality', 'Stress', 'Mood'].includes(selectedMetric)) {
-      yDomain = [0, 10];
-      yTicks = [2, 4, 6, 8, 10];
-    } else if (selectedMetric === 'Body mass') {
-      yDomain = [68, 80];
-      yTicks = [70, 72, 74, 76, 78];
-    } else if (selectedMetric === 'Cabin CO2') {
-      yDomain = [1.5, 3.5];
-      yTicks = [1.5, 2.0, 2.5, 3.0, 3.5];
-    } else if (selectedMetric === 'Radiation dose rate') {
-      yDomain = [0.25, 0.65];
-      yTicks = [0.3, 0.4, 0.5, 0.6];
-    } else {
-      const allVals = points.map((p: any) => p.value);
-      const minVal = Math.min(...allVals, lower);
-      const maxVal = Math.max(...allVals, upper);
-      const pad = (maxVal - minVal) * 0.15 || 5;
-      const low = Math.floor(minVal - pad);
-      const high = Math.ceil(maxVal + pad);
-      const step = Math.round((high - low) / 4) || 1;
+    if (isDecimal) {
+      const low = Number(rawLow.toFixed(1));
+      const high = Number(rawHigh.toFixed(1));
       yDomain = [low, high];
-      yTicks = [low, low + step, low + step * 2, low + step * 3, high];
+      const step = (high - low) / 4;
+      yTicks = [low, Number((low + step).toFixed(2)), Number((low + step * 2).toFixed(2)), Number((low + step * 3).toFixed(2)), high];
+    } else {
+      const low = Math.floor(rawLow);
+      const high = Math.ceil(rawHigh);
+      yDomain = [low, high];
+      const step = Math.max(1, Math.round((high - low) / 4));
+      yTicks = [low, low + step, low + step * 2, low + step * 3, low + step * 4];
     }
 
     return {
@@ -859,7 +931,7 @@ export default function App() {
       domain: yDomain,
       ticks: yTicks,
     };
-  }, [measurements, backendMetric, selectedMetric, selected]);
+  }, [measurements, backendMetric, selectedMetric]);
 
   // Custom dot to render distinct red circular markers with dark border on drift points
   const CustomDot = (props: any) => {
@@ -920,22 +992,11 @@ export default function App() {
   const recentAssessments = assessmentsList.slice(-7);
   const avgSleep7Days = recentAssessments.length
     ? (recentAssessments.reduce((acc, curr) => acc + (curr.sleep_hours || 0), 0) / recentAssessments.length).toFixed(1)
-    : '7.5';
+    : '--';
 
   const behaviouralChartPoints = useMemo(() => {
     if (!assessmentsList.length) {
-      return Array.from({ length: 60 }, (_, i) => ({
-        day: `D${i + 1}`,
-        dayNum: i + 1,
-        value: 7.5,
-        sleep_hours: 7.5,
-        fatigue: 2,
-        stress: 3,
-        mood: 7,
-        sleep_quality: 7,
-        symptoms: 'None reported',
-        isAnomaly: false,
-      }));
+      return [];
     }
 
     return assessmentsList.map((a: Any, idx: number) => {
@@ -976,55 +1037,69 @@ export default function App() {
   }, [assessmentsList, behaviouralMetric]);
 
   const behaviouralMeta = useMemo(() => {
+    const count = assessmentsList.length;
+    const calcAvg = (key: string) =>
+      count ? assessmentsList.reduce((acc, curr) => acc + (Number(curr[key]) || 0), 0) / count : 0;
+
     switch (behaviouralMetric) {
-      case 'Fatigue':
+      case 'Fatigue': {
+        const val = count ? Number(calcAvg('fatigue').toFixed(1)) : 0;
         return {
           unit: '/10',
-          targetLabel: 'Nominal threshold: <= 3/10',
-          baselineVal: 3.0,
+          targetLabel: `Historical avg: ${val}/10 (Nominal: <= 3/10)`,
+          baselineVal: val,
           color: '#ef4444',
           yDomain: [0, 10],
           yTicks: [0, 2, 4, 6, 8, 10],
         };
-      case 'Stress':
+      }
+      case 'Stress': {
+        const val = count ? Number(calcAvg('stress').toFixed(1)) : 0;
         return {
           unit: '/10',
-          targetLabel: 'Operational limit: <= 4/10',
-          baselineVal: 3.0,
+          targetLabel: `Historical avg: ${val}/10 (Nominal: <= 4/10)`,
+          baselineVal: val,
           color: '#f59e0b',
           yDomain: [0, 10],
           yTicks: [0, 2, 4, 6, 8, 10],
         };
-      case 'Mood':
+      }
+      case 'Mood': {
+        const val = count ? Number(calcAvg('mood').toFixed(1)) : 0;
         return {
           unit: '/10',
-          targetLabel: 'Nominal readiness: >= 7/10',
-          baselineVal: 7.0,
+          targetLabel: `Historical avg: ${val}/10 (Nominal: >= 7/10)`,
+          baselineVal: val,
           color: '#10b981',
           yDomain: [0, 10],
           yTicks: [0, 2, 4, 6, 8, 10],
         };
-      case 'Sleep Quality':
+      }
+      case 'Sleep Quality': {
+        const val = count ? Number(calcAvg('sleep_quality').toFixed(1)) : 0;
         return {
           unit: '/10',
-          targetLabel: 'Restorative baseline: >= 7/10',
-          baselineVal: 7.0,
+          targetLabel: `Historical avg: ${val}/10 (Nominal: >= 7/10)`,
+          baselineVal: val,
           color: '#8b5cf6',
           yDomain: [0, 10],
           yTicks: [0, 2, 4, 6, 8, 10],
         };
+      }
       case 'Sleep Duration':
-      default:
+      default: {
+        const val = count ? Number(calcAvg('sleep_hours').toFixed(1)) : 0;
         return {
           unit: 'hrs',
-          targetLabel: 'Target operational sleep: 7.0 – 8.5 hrs',
-          baselineVal: 7.5,
+          targetLabel: `Historical avg: ${val} hrs (Target: 7.0 – 8.5 hrs)`,
+          baselineVal: val,
           color: '#0284c7',
-          yDomain: [0, 10],
-          yTicks: [0, 2, 4, 6, 8, 10],
+          yDomain: [0, 12],
+          yTicks: [0, 3, 6, 9, 12],
         };
+      }
     }
-  }, [behaviouralMetric]);
+  }, [behaviouralMetric, assessmentsList]);
 
   const BehaviouralDot = (props: any) => {
     const { cx, cy, payload } = props;
@@ -1353,60 +1428,35 @@ export default function App() {
 
               {/* Quick Access Role Presets */}
               <div className="login-roles">
-                <div className="login-roles-title">QUICK ACCESS DEMO PRESETS:</div>
+                <div className="login-roles-title">ACTIVE ROLES & PERSONNEL (FROM DATABASE):</div>
                 <div className="login-roles-buttons">
-                  <button
-                    type="button"
-                    className="role-preset-btn admin-preset"
-                    onClick={() => {
-                      setUsernameInput('medical');
-                      setPasswordInput('orbitcare-demo');
-                      setError('');
-                      setLoginClearancePending(false);
-                    }}
-                  >
-                    <ShieldCheck size={14} color="#d97706" />
-                    <span>Admin (Medical Officer)</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="role-preset-btn"
-                    onClick={() => {
-                      setUsernameInput('astronaut');
-                      setPasswordInput('orbitcare-demo');
-                      setError('');
-                      setLoginClearancePending(false);
-                    }}
-                  >
-                    <Users size={14} color="#0284c7" />
-                    <span>User (Maya Chen)</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="role-preset-btn"
-                    onClick={() => {
-                      setUsernameInput('elena');
-                      setPasswordInput('orbitcare-demo');
-                      setError('');
-                      setLoginClearancePending(false);
-                    }}
-                  >
-                    <Users size={14} color="#0284c7" />
-                    <span>User (Elena Rossi)</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="role-preset-btn"
-                    onClick={() => {
-                      setUsernameInput('david');
-                      setPasswordInput('orbitcare-demo');
-                      setError('');
-                      setLoginClearancePending(false);
-                    }}
-                  >
-                    <Users size={14} color="#0284c7" />
-                    <span>User (David Okafor)</span>
-                  </button>
+                  {systemUsers
+                    .filter((u) => u.status === 'approved')
+                    .map((u) => {
+                      const isAdmin = u.role === 'medical' || u.role === 'medical_officer';
+                      return (
+                        <button
+                          key={u.id || u.username}
+                          type="button"
+                          className={`role-preset-btn ${isAdmin ? 'admin-preset' : ''}`}
+                          onClick={() => {
+                            setUsernameInput(u.username);
+                            setPasswordInput('orbitcare-demo');
+                            setError('');
+                            setLoginClearancePending(false);
+                          }}
+                        >
+                          {isAdmin ? (
+                            <ShieldCheck size={14} color="#d97706" />
+                          ) : (
+                            <Users size={14} color="#0284c7" />
+                          )}
+                          <span>
+                            {isAdmin ? 'Admin' : 'Astronaut'} ({u.full_name || u.name || u.username})
+                          </span>
+                        </button>
+                      );
+                    })}
                 </div>
               </div>
             </>
