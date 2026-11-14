@@ -109,9 +109,15 @@ async def upload_document(aid:int,file:UploadFile=File(...),db:Session=Depends(g
     if not file.filename.lower().endswith(".pdf"):raise HTTPException(400,"Upload a PDF report")
     content=await file.read()
     try:
-        import fitz
-        doc=fitz.open(stream=content,filetype="pdf"); text="\n".join(page.get_text() for page in doc)
-    except Exception as e: raise HTTPException(400,f"Could not read PDF: {e}")
+        try:
+            import pypdf, io
+            reader = pypdf.PdfReader(io.BytesIO(content))
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        except ImportError:
+            import fitz
+            doc = fitz.open(stream=content, filetype="pdf")
+            text = "\n".join(page.get_text() for page in doc)
+    except Exception as e: raise HTTPException(400, f"Could not read PDF: {e}")
     if not text.strip(): text="No selectable text found. OCR was not available; values require manual review."
     report=MedicalDocument(astronaut_id=aid,filename=file.filename,extracted_text=text[:50000],confidence=.82 if len(text)>30 else .25)
     db.add(report);db.flush()
