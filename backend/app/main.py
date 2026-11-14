@@ -30,6 +30,7 @@ app.add_middleware(
     allow_origins=[origin.strip() for origin in os.getenv("FRONTEND_ORIGINS", "").split(",") if origin.strip()] + [
         "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://localhost:8000"
     ],
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1234,6 +1235,7 @@ def reject_observation(observation_id: int, data: ObservationReview | None = Non
 # ----------------- TIMELINE & ASSISTANT -----------------
 
 @app.get("/api/timeline/{aid}")
+@app.get("/api/astronauts/{aid}/timeline")
 def timeline(aid: int, db: Session = Depends(get_db), user = Depends(current_user)):
     allowed(user, aid)
     events = []

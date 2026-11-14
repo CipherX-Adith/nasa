@@ -109,10 +109,34 @@ export default function App() {
 
   const isLight = theme === 'light';
 
-  const [token, setToken] = useState(localStorage.getItem('token') || '');
-  const [user, setUser] = useState<Any | null>(
-    JSON.parse(localStorage.getItem('user') || 'null')
-  );
+  const [token, setToken] = useState(() => {
+    const saved = localStorage.getItem('token') || '';
+    if (!saved) return '';
+    try {
+      const parts = saved.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          return '';
+        }
+      }
+    } catch {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      return '';
+    }
+    return saved;
+  });
+  const [user, setUser] = useState<Any | null>(() => {
+    if (!localStorage.getItem('token')) return null;
+    try {
+      return JSON.parse(localStorage.getItem('user') || 'null');
+    } catch {
+      return null;
+    }
+  });
   const [astronauts, setAstronauts] = useState<Any[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [measurements, setMeasurements] = useState<Any[]>([]);
@@ -357,6 +381,14 @@ export default function App() {
       },
     });
     if (!res.ok) {
+      if (res.status === 401 && !path.includes('/auth/login') && !path.includes('/auth/register')) {
+        // If an authenticated request is unauthorized, the session has expired
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setToken('');
+        setUser(null);
+        setError('Session expired. Please sign in again.');
+      }
       const d = await res.json().catch(() => ({ detail: 'Request failed' }));
       const msg = typeof d.detail === 'string'
         ? d.detail
@@ -410,7 +442,11 @@ export default function App() {
         throw apiErr;
       }
     } catch (x: any) {
-      const msg = x.name === 'AbortError' ? 'Verification timed out. Reconnecting…' : (x.message || 'Login failed');
+      const msg = x.name === 'AbortError'
+        ? 'Verification timed out. Reconnecting…'
+        : (x.name === 'TypeError' && x.message?.includes('fetch')
+            ? 'Unable to connect to mission control server. Ensure backend is running.'
+            : (x.message || 'Login failed'));
       if (msg.toLowerCase().includes('pending') || msg.toLowerCase().includes('clearance')) {
         setLoginClearancePending(true);
       } else {
@@ -648,7 +684,14 @@ export default function App() {
     return () => unsub();
   }, [firebaseActive]);
 
-  const astronaut = astronauts.find((a: Any) => a.id === selected) || astronauts[0];
+  const fallbackAstro = {
+    id: 1,
+    name: user?.full_name || user?.username || 'Crew Member',
+    call_sign: user?.call_sign || 'ORION-1',
+    mission: 'Asteria-7',
+    flight_clearance: 'FLIGHT READY',
+  };
+  const astronaut = astronauts.find((a: Any) => a.id === selected) || astronauts[0] || fallbackAstro;
 
   // Firebase Real-time Measurements Subscription
   useEffect(() => {
@@ -800,7 +843,12 @@ export default function App() {
             method: 'POST',
             body: JSON.stringify({}),
           });
-        } catch { tickData = null; }
+        } catch (tickErr: any) {
+          tickData = null;
+          if (tickErr.message?.toLowerCase().includes('session') || tickErr.message?.toLowerCase().includes('token') || tickErr.message?.toLowerCase().includes('unauthorized')) {
+            clearInterval(streamInterval);
+          }
+        }
 
         if (tickData && tickData.value !== undefined) {
           setMeasurements((prev) => {
