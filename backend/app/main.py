@@ -1,10 +1,18 @@
 import os, re, random, json, urllib.request
+from pathlib import Path
+from statistics import median
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, text
 from pydantic import BaseModel, Field
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+except ImportError:
+    pass
 from .db import Base, engine, get_db
 from .models import User, Astronaut, Measurement, Alert, Assessment, MedicalRecord, MedicalDocument, MedicalObservation
 from .core import verify_password, hash_password, make_token, read_token
@@ -48,6 +56,10 @@ def ensure_schema():
                 conn.execute(text("ALTER TABLE users ADD COLUMN specialization VARCHAR DEFAULT 'Mission Specialist'"))
             if "created_at" not in cols:
                 conn.execute(text("ALTER TABLE users ADD COLUMN created_at DATETIME"))
+            res_a = conn.execute(text("PRAGMA table_info(astronauts)")).fetchall()
+            cols_a = {r[1] for r in res_a}
+            if "flight_clearance" not in cols_a:
+                conn.execute(text("ALTER TABLE astronauts ADD COLUMN flight_clearance VARCHAR DEFAULT 'FLIGHT READY'"))
             conn.commit()
         except Exception as e:
             print("Schema migration note:", e)
@@ -408,6 +420,14 @@ class MeasurementIn(BaseModel):
     timestamp: datetime | None = None
     source: str = "Manual entry"
     quality: str = "good"
+
+class ClearanceIn(BaseModel):
+    clearance: str
+    notes: str = ""
+
+class ConsultIn(BaseModel):
+    note: str
+    urgency: str = "medium"
 
 @app.get("/")
 @app.get("/api")
@@ -816,6 +836,80 @@ def astronaut_warnings(aid: int, db: Session = Depends(get_db), user = Depends(c
         "abnormal_behaviours": analysis["abnormal_behaviours"],
         "recommendations": analysis["recommendations"]
     }
+
+@app.post("/api/astronauts/{aid}/clearance")
+def update_flight_clearance(aid: int, data: ClearanceIn, db: Session = Depends(get_db), user = Depends(medical)):
+    astro = db.get(Astronaut, aid)
+    if not astro:
+        raise HTTPException(404, "Astronaut not found")
+    astro.status = data.clearance
+    if hasattr(astro, "flight_clearance"):
+        astro.flight_clearance = data.clearance
+    
+    now_utc = datetime.now(timezone.utc)
+    rec = MedicalRecord(
+        astronaut_id=aid,
+        record_type="Flight Clearance",
+        title=f"Flight Clearance Directive: {data.clearance}",
+        physician=user.full_name or "Dr. Robert Vance, CMO",
+        findings=f"Flight clearance status updated to {data.clearance}. {data.notes}".strip(),
+        countermeasures="Continue nominal spaceflight countermeasure schedule." if data.clearance == "FLIGHT READY" else "Workload restricted; follow prescribed flight surgeon countermeasures.",
+        status="Signed & Verified",
+        date=now_utc.strftime("%Y-%m-%d"),
+        timestamp=now_utc
+    )
+    db.add(rec)
+    db.commit()
+
+    fb_request(f"astronauts/{aid}/flight_clearance", data.clearance, method="PUT")
+    fb_request(f"astronauts/{aid}/status", data.clearance, method="PUT")
+    return {"astronaut_id": aid, "clearance": data.clearance, "status": data.clearance}
+
+@app.post("/api/astronauts/{aid}/request-consult")
+def request_consult(aid: int, data: ConsultIn, db: Session = Depends(get_db), user = Depends(current_user)):
+    allowed(user, aid)
+    astro = db.get(Astronaut, aid)
+    if not astro:
+        raise HTTPException(404, "Astronaut not found")
+    
+    alt = Alert(
+        astronaut_id=aid,
+        metric="Telemedicine Consult",
+        priority="high" if data.urgency == "high" else "medium",
+        reason=f"Astronaut {astro.name} ({astro.call_sign}) requested flight surgeon consultation: \"{data.note}\""
+    )
+    db.add(alt)
+    db.commit()
+    db.refresh(alt)
+
+    fb_request(f"alerts/{alt.id}", {
+        "id": alt.id,
+        "astronaut_id": aid,
+        "metric": alt.metric,
+        "priority": alt.priority,
+        "reason": alt.reason,
+        "acknowledged": False,
+        "created_at": alt.created_at.isoformat(),
+    }, method="PUT")
+
+    return {"message": "Consultation request sent to Flight Surgeon Dr. Robert Vance.", "alert_id": alt.id}
+
+@app.get("/api/fleet/readiness")
+def fleet_readiness(db: Session = Depends(get_db), user = Depends(medical)):
+    all_astros = db.query(Astronaut).all()
+    out = []
+    for a in all_astros:
+        meas = db.query(Measurement).filter_by(astronaut_id=a.id).order_by(Measurement.timestamp).all()
+        ass = db.query(Assessment).filter_by(astronaut_id=a.id).order_by(Assessment.timestamp).all()
+        analysis = analyze_crew_health(meas, ass, astronaut=a)
+        out.append({
+            "astronaut": serialize(a),
+            "flight_readiness_score": analysis["flight_readiness_score"],
+            "overall_status": analysis["overall_status"],
+            "abnormal_behaviours_count": len(analysis["abnormal_behaviours"]),
+            "flight_clearance": getattr(a, "flight_clearance", "FLIGHT READY") or a.status or "FLIGHT READY"
+        })
+    return out
 
 # ----------------- ASSESSMENTS & DAILY HEALTH DATA -----------------
 

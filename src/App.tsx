@@ -274,6 +274,26 @@ export default function App() {
   const isAdmin = user?.role === 'medical';
   const isUser = !isAdmin && !!user;
 
+  // Admin Fleet Triage & Clearance Authority state
+  const [fleetData, setFleetData] = useState<Any[]>([]);
+  const [clearanceUpdating, setClearanceUpdating] = useState(false);
+
+  // Astronaut Role: Daily Countermeasure Adherence state
+  const [adherenceChecks, setAdherenceChecks] = useState<Record<string, boolean>>(() => {
+    try {
+      const stored = localStorage.getItem('orbitcare_countermeasure_adherence');
+      return stored ? JSON.parse(stored) : { cardio: true, ared: false, hydration: true, circadian: false };
+    } catch {
+      return { cardio: true, ared: false, hydration: true, circadian: false };
+    }
+  });
+
+  // Astronaut Role: Telemedicine Consult state
+  const [consultModalOpen, setConsultModalOpen] = useState(false);
+  const [consultNote, setConsultNote] = useState('');
+  const [consultSubmitting, setConsultSubmitting] = useState(false);
+  const [consultFeedback, setConsultFeedback] = useState('');
+
   async function api(path: string, options: RequestInit = {}) {
     const res = await fetch(API + path, {
       ...options,
@@ -1487,6 +1507,207 @@ export default function App() {
     }
   };
 
+  // Fetch fleet-wide health status and clearances for Flight Surgeon Admin
+  const loadFleetData = async () => {
+    if (!isAdmin || !token) return;
+    try {
+      const fleet = await api('/fleet/readiness');
+      if (fleet && Array.isArray(fleet)) {
+        setFleetData(fleet);
+      }
+    } catch (e) {
+      console.warn('Fleet data load error:', e);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin && token) {
+      loadFleetData();
+    }
+  }, [isAdmin, token, selected]);
+
+  // Flight Clearance Authority: Flight Surgeon updates astronaut clearance
+  const handleUpdateClearance = async (aid: number, newClearance: string) => {
+    setClearanceUpdating(true);
+    try {
+      await api(`/astronauts/${aid}/clearance`, {
+        method: 'POST',
+        body: JSON.stringify({ clearance: newClearance }),
+      });
+      setAstronauts((prev) =>
+        prev.map((a: Any) =>
+          a.id === aid ? { ...a, status: newClearance, flight_clearance: newClearance } : a
+        )
+      );
+      loadFleetData();
+      const recs = await api(`/astronauts/${aid}/medical-records`).catch(() => []);
+      if (recs && recs.length) setMedicalRecords(recs);
+    } catch (e: any) {
+      setError(e.message || 'Failed to update clearance');
+    } finally {
+      setClearanceUpdating(false);
+    }
+  };
+
+  // Astronaut Countermeasure Adherence toggle
+  const toggleAdherence = (key: string) => {
+    setAdherenceChecks((prev) => {
+      const updated = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem('orbitcare_countermeasure_adherence', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const adherenceCompletedCount = Object.values(adherenceChecks).filter(Boolean).length;
+  const adherencePercent = Math.round((adherenceCompletedCount / 4) * 100);
+
+  // Astronaut Telemedicine Request transmission
+  const handleSendConsult = async () => {
+    if (!consultNote.trim()) return;
+    setConsultSubmitting(true);
+    setConsultFeedback('');
+    try {
+      const aid = user?.astronaut_id || selected || 1;
+      await api(`/astronauts/${aid}/request-consult`, {
+        method: 'POST',
+        body: JSON.stringify({ note: consultNote.trim(), urgency: 'high' }),
+      });
+      setConsultFeedback('✓ Telemedicine request transmitted to Chief Flight Surgeon Dr. Vance.');
+      setConsultNote('');
+      setTimeout(() => {
+        setConsultModalOpen(false);
+        setConsultFeedback('');
+      }, 2000);
+    } catch (e: any) {
+      setConsultFeedback(`Error: ${e.message || 'Failed to send request'}`);
+    } finally {
+      setConsultSubmitting(false);
+    }
+  };
+
+  // Admin Ability: Fleet Operational Readiness Triage Grid
+  const renderFleetTriage = () => {
+    if (!isAdmin) return null;
+    const items = fleetData.length ? fleetData : [
+      { astronaut: { id: 1, name: 'Maya Chen', call_sign: 'ORION-1', status: 'MEDICAL HOLD' }, flight_readiness_score: 35, overall_status: 'CRITICAL', abnormal_behaviours_count: 6, flight_clearance: 'MEDICAL HOLD' },
+      { astronaut: { id: 2, name: 'Elena Rossi', call_sign: 'VEGA-2', status: 'FLIGHT READY' }, flight_readiness_score: 92, overall_status: 'NOMINAL', abnormal_behaviours_count: 1, flight_clearance: 'FLIGHT READY' },
+      { astronaut: { id: 3, name: 'David Okafor', call_sign: 'NOVA-3', status: 'FLIGHT READY' }, flight_readiness_score: 84, overall_status: 'ELEVATED RISK', abnormal_behaviours_count: 2, flight_clearance: 'FLIGHT READY' },
+    ];
+
+    return (
+      <div className="fleet-triage-container">
+        <div className="fleet-triage-header">
+          <span className="fleet-triage-title">
+            <Users size={15} /> FLEET OPERATIONAL READINESS & CREW TRIAGE
+          </span>
+          <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: 'var(--text-muted)' }}>
+            Flight Surgeon Fleet Control · Click crew member to inspect telemetry & records
+          </span>
+        </div>
+        <div className="fleet-grid">
+          {items.map((f: Any) => {
+            const a = f.astronaut;
+            const isCurrent = (selected || astronaut?.id || 1) === a.id;
+            const scoreClass = f.flight_readiness_score < 65 ? 'critical' : f.flight_readiness_score < 85 ? 'elevated' : 'nominal';
+            const clearance = f.flight_clearance || a.status || 'FLIGHT READY';
+            const clearanceClass = clearance === 'FLIGHT READY' ? 'ready' : clearance === 'RESTRICTED WORKLOAD' ? 'restricted' : 'hold';
+
+            return (
+              <div
+                key={a.id}
+                className={`fleet-card ${isCurrent ? 'selected' : ''}`}
+                onClick={() => setSelected(a.id)}
+              >
+                <div className="fleet-card-top">
+                  <div className="fleet-astro-info">
+                    <div className="fleet-avatar">
+                      {a.call_sign?.slice(0, 2) || 'AS'}
+                    </div>
+                    <div className="fleet-astro-text">
+                      <h4>{a.name}</h4>
+                      <span>{a.call_sign} · {a.mission || 'Asteria-7'}</span>
+                    </div>
+                  </div>
+                  <div className="fleet-score-dial">
+                    <span className={`fleet-score-num ${scoreClass}`}>
+                      {f.flight_readiness_score}%
+                    </span>
+                    <span className="fleet-score-label">FRI Index</span>
+                  </div>
+                </div>
+
+                <div className="fleet-card-body">
+                  <span className={`clearance-pill ${clearanceClass}`}>
+                    ● {clearance}
+                  </span>
+                  <span className="fleet-inspect-indicator">
+                    {isCurrent ? '● Active View' : 'Inspect →'}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Astronaut Ability: Daily Spaceflight Countermeasure Adherence Tracker
+  const renderAstronautDutyCard = () => {
+    if (!isUser) return null;
+    const protocols = [
+      { key: 'cardio', title: 'T-2 Treadmill / Ergometer Session', desc: '45 min cardiovascular loading at 75-85% VO2 max', icon: '🏃‍♂️' },
+      { key: 'ared', title: 'ARED Advanced Resistive Exercise Protocol', desc: '45 min squats, deadlifts & heel raises (bone density stimulus)', icon: '🏋️‍♂️' },
+      { key: 'hydration', title: '2.5 L Electrolyte Hydration Target', desc: 'Microgravity plasma volume restoration loading', icon: '💧' },
+      { key: 'circadian', title: 'Circadian Light Visor & Melatonin Protocol', desc: 'Blue-depleted LED spectrum shift + 0.5mg melatonin', icon: '💡' },
+    ];
+
+    return (
+      <div className="astronaut-duty-card">
+        <div className="astronaut-duty-head">
+          <div className="duty-title">
+            <Activity size={18} color="#0284c7" />
+            <div>
+              <h3>Daily Spaceflight Countermeasure Adherence</h3>
+              <p>Mandatory 2.5h daily orbital countermeasures schedule for {astronaut?.name || 'astronaut'}.</p>
+            </div>
+          </div>
+          <div className="adherence-bar-container">
+            <div className="adherence-progress-track">
+              <div className="adherence-progress-fill" style={{ width: `${adherencePercent}%` }} />
+            </div>
+            <span className="adherence-percent">{adherencePercent}% Compliance ({adherenceCompletedCount}/4)</span>
+          </div>
+        </div>
+
+        <div className="countermeasure-checklist">
+          {protocols.map((p) => {
+            const isDone = !!adherenceChecks[p.key];
+            return (
+              <div
+                key={p.key}
+                className={`checklist-item ${isDone ? 'completed' : ''}`}
+                onClick={() => toggleAdherence(p.key)}
+              >
+                <div className="checklist-checkbox">
+                  {isDone && <Check size={13} strokeWidth={3} />}
+                </div>
+                <div className="checklist-content">
+                  <div className="checklist-title">
+                    {p.icon} {p.title}
+                  </div>
+                  <div className="checklist-desc">{p.desc}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   // Reusable Abnormal Behaviour & Anomaly Warning Banner
   const renderAbnormalWarningBanner = () => {
     if (!activeWarnings || activeWarnings.length === 0) return null;
@@ -2333,23 +2554,40 @@ export default function App() {
                   </p>
                 </div>
 
-                {/* OVERVIEW MEMBER DETAILS: Dropdown for Admin, Locked Personal Badge for User */}
+                {/* OVERVIEW MEMBER DETAILS: Dropdown & Clearance Control for Admin, Personal Badge & SOS for User */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                   {isAdmin ? (
-                    <div className="selector">
-                      <span>ASTRONAUT</span>
-                      <select
-                        value={selected || ''}
-                        onChange={(e) => setSelected(+e.target.value)}
-                      >
-                        {astronauts.map((a: Any) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name} · {a.call_sign}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={15} />
-                    </div>
+                    <>
+                      <div className="selector">
+                        <span>ASTRONAUT</span>
+                        <select
+                          value={selected || ''}
+                          onChange={(e) => setSelected(+e.target.value)}
+                        >
+                          {astronauts.map((a: Any) => (
+                            <option key={a.id} value={a.id}>
+                              {a.name} · {a.call_sign}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={15} />
+                      </div>
+
+                      {/* Flight Surgeon Authority: Direct Flight Clearance Assignment */}
+                      <div className="clearance-control-row" title="Flight Surgeon Clearance Authority">
+                        <span className="clearance-control-label">Clearance:</span>
+                        <select
+                          className="clearance-select"
+                          value={astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY'}
+                          disabled={clearanceUpdating}
+                          onChange={(e) => handleUpdateClearance(astronaut?.id || selected || 1, e.target.value)}
+                        >
+                          <option value="FLIGHT READY">🟢 FLIGHT READY (Nominal)</option>
+                          <option value="RESTRICTED WORKLOAD">🟡 RESTRICTED WORKLOAD (Light EVA)</option>
+                          <option value="MEDICAL HOLD">🔴 MEDICAL HOLD (Grounded / Rest)</option>
+                        </select>
+                      </div>
+                    </>
                   ) : (
                     <div className="personal-badge-card">
                       <span className="personal-badge-label">LOGGED IN CREW MEMBER</span>
@@ -2362,8 +2600,22 @@ export default function App() {
                       <div className="personal-badge-callsign">
                         Call Sign: <b>{astronaut?.call_sign}</b> · Mission: <b>{astronaut?.mission || 'Asteria-7'}</b>
                       </div>
+                      <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span className={`clearance-pill ${(astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY') === 'FLIGHT READY' ? 'ready' : (astronaut?.flight_clearance || astronaut?.status) === 'RESTRICTED WORKLOAD' ? 'restricted' : 'hold'}`}>
+                          ● Clearance: {astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY'}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                          onClick={() => setConsultModalOpen(true)}
+                        >
+                          🩺 Consult Flight Surgeon
+                        </button>
+                      </div>
                     </div>
                   )}
+
                   <button
                     type="button"
                     className="btn-clinical-report"
@@ -2373,6 +2625,12 @@ export default function App() {
                   </button>
                 </div>
               </div>
+
+              {/* ADMIN ABILITY: FLEET OPERATIONAL READINESS & CREW TRIAGE */}
+              {renderFleetTriage()}
+
+              {/* ASTRONAUT ABILITY: DAILY COUNTERMEASURE ADHERENCE TRACKER */}
+              {renderAstronautDutyCard()}
 
               {/* STATS ROW: ONLY on Overview */}
               <div className="stats">
@@ -3943,6 +4201,61 @@ export default function App() {
 
       {/* NASA Flight Surgeon Daily Clinical Health Report Modal */}
       {renderDailyReportModal()}
+
+      {/* Astronaut Telemedicine Request Modal */}
+      {consultModalOpen && (
+        <div className="clinical-modal-overlay" onClick={() => setConsultModalOpen(false)}>
+          <div className="consult-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <div className="clinical-modal-brand">ORBITCARE TELEMEDICINE · MISSION CONTROL LINK</div>
+                <h3>Request Flight Surgeon Consultation</h3>
+                <p>
+                  Direct priority uplink to <b>Dr. Robert Vance</b> (Chief Medical Officer). State any subjective symptoms, operational fatigue, or physical concerns.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="clinical-modal-close"
+                onClick={() => setConsultModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <textarea
+              className="consult-textarea"
+              placeholder="Describe your symptoms or reason for consult (e.g., 'Experiencing mild dizziness during morning centrifuge prep; requesting evaluation.')..."
+              value={consultNote}
+              onChange={(e) => setConsultNote(e.target.value)}
+            />
+
+            {consultFeedback && (
+              <div style={{ font: "600 12.5px 'DM Sans'", color: consultFeedback.startsWith('✓') ? '#059669' : '#dc2626', marginBottom: 14 }}>
+                {consultFeedback}
+              </div>
+            )}
+
+            <div className="consult-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setConsultModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary-action"
+                disabled={consultSubmitting || !consultNote.trim()}
+                onClick={handleSendConsult}
+              >
+                {consultSubmitting ? 'Transmitting…' : '🚀 Transmit Priority Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

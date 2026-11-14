@@ -26,6 +26,7 @@ class Astronaut(Base):
     call_sign: Mapped[str] = mapped_column(String)
     mission: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="Active")
+    flight_clearance: Mapped[str | None] = mapped_column(String, nullable=True, default="FLIGHT READY")
     simulated: Mapped[bool] = mapped_column(Boolean, default=True)
 
 class Measurement(Base):
