@@ -2092,8 +2092,6 @@ export default function App() {
 
     return (
       <div className="header-crew-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        {extraControls}
-
         {/* LOGGED IN / ACTIVE CREW MEMBER BADGE CARD */}
         <div className="personal-badge-card">
           <div className="personal-badge-top-row">
@@ -2149,6 +2147,8 @@ export default function App() {
         >
           📋 Daily Clinical Report
         </button>
+
+        {extraControls}
       </div>
     );
   };
@@ -3202,10 +3202,10 @@ export default function App() {
                     <button
                       type="button"
                       className="btn-approve"
-                      style={{ width: 'auto', padding: '9px 16px', display: 'inline-flex', gap: 6 }}
+                      style={{ width: 'auto', padding: '11px 18px', display: 'inline-flex', alignItems: 'center', gap: 7, borderRadius: '10px', font: "700 13.5px 'DM Sans', sans-serif" }}
                       onClick={() => setShowAddMedRecordModal(!showAddMedRecordModal)}
                     >
-                      <FilePlus size={15} />
+                      <FilePlus size={16} />
                       {showAddMedRecordModal ? 'Close Form' : '+ Add Clinical Evaluation'}
                     </button>
                   )
