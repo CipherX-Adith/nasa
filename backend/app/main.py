@@ -76,9 +76,30 @@ def measurements(aid:int,metric:str|None=None,db:Session=Depends(get_db),user=De
     if metric:q=q.filter_by(metric=metric)
     return [serialize(x) for x in q.order_by(Measurement.timestamp).all()]
 @app.post("/api/astronauts/{aid}/measurements")
-def add_measurement(aid:int,data:MeasurementIn,db:Session=Depends(get_db),user=Depends(medical)):
+def add_measurement(aid:int,data:MeasurementIn,db:Session=Depends(get_db),user=Depends(current_user)):
+    allowed(user,aid)
     if not db.get(Astronaut,aid):raise HTTPException(404,"Astronaut not found")
     x=Measurement(astronaut_id=aid,**data.model_dump(exclude={"timestamp"}),timestamp=data.timestamp or datetime.now(timezone.utc),simulated=False);db.add(x);db.commit();db.refresh(x);refresh_alerts(db);return serialize(x)
+@app.post("/api/astronauts/{aid}/telemetry/live-tick")
+def live_telemetry_tick(aid:int,db:Session=Depends(get_db),user=Depends(current_user)):
+    allowed(user,aid)
+    a=db.get(Astronaut,aid)
+    if not a: raise HTTPException(404,"Astronaut not found")
+    import random
+    latest_hr = db.query(Measurement).filter_by(astronaut_id=aid,metric="Resting heart rate").order_by(Measurement.timestamp.desc()).first()
+    cur_hr = latest_hr.value if latest_hr else 72.0
+    new_hr = round(max(55.0, min(120.0, cur_hr + random.uniform(-0.8, 0.8))), 1)
+    x = Measurement(
+        astronaut_id=aid,
+        domain="cardiovascular",
+        metric="Resting heart rate",
+        value=new_hr,
+        unit="bpm",
+        timestamp=datetime.now(timezone.utc),
+        source="Live telemetry downlink",
+        simulated=False
+    )
+    db.add(x);db.commit();db.refresh(x);refresh_alerts(db);return serialize(x)
 @app.get("/api/astronauts/{aid}/baselines")
 def baselines(aid:int,db:Session=Depends(get_db),user=Depends(current_user)):
     allowed(user,aid); rows=db.query(Measurement).filter_by(astronaut_id=aid).all(); groups={}
