@@ -1,0 +1,5 @@
+# Optional scanned-PDF OCR support. Also install the Tesseract executable and
+# configure its path for pytesseract if it is not on PATH.
+PyMuPDF
+pytesseract
+Pillow

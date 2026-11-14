@@ -14,19 +14,23 @@ import {
   AlertTriangle,
   Atom,
   BadgeCheck,
+  Brain,
   Check,
   CheckCircle2,
   ChevronDown,
   Clock3,
   FilePlus,
   FileText,
+  Heart,
   HeartPulse,
   LayoutDashboard,
   LogOut,
   MessageCircle,
   Moon,
   Plus,
+  Shield,
   ShieldCheck,
+  Sparkles,
   Stethoscope,
   Sun,
   Upload,
@@ -36,11 +40,11 @@ import {
   Wind,
   XCircle,
 } from 'lucide-react';
+import { DigitalTwinViewer, OrganKey } from './components/DigitalTwinViewer';
 import {
   isFirebaseEnabled,
   subscribeToAssessments,
   saveAssessmentToFirebase,
-  streamTelemetryToFirebase,
   firebaseRegisterUser,
   subscribeToFirebaseUsers,
   firebaseApproveUser,
@@ -85,7 +89,7 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Clean up legacy local assessment caches so Firebase Realtime Database is the sole source of truth
+  // Clear legacy browser assessment caches; records now come from the authenticated API.
   useEffect(() => {
     try {
       const keysToRemove: string[] = [];
@@ -116,6 +120,7 @@ export default function App() {
   const [alerts, setAlerts] = useState<Any[]>([]);
   const [timeline, setTimeline] = useState<Any[]>([]);
   const [docs, setDocs] = useState<Any[]>([]);
+  const [observationEdits, setObservationEdits] = useState<Record<number, Any>>({});
   const [tab, setTab] = useState('Overview');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -136,23 +141,26 @@ export default function App() {
   const [assessmentFeedback, setAssessmentFeedback] = useState('');
   const [assessmentError, setAssessmentError] = useState('');
 
+  // Interactive Digital Twin active organ state (synchronized with telemetry graphs)
+  const [selectedOrgan, setSelectedOrgan] = useState<OrganKey>('heart');
+
   // Real-time synchronization & live telemetry state
   const [liveStreaming, setLiveStreaming] = useState(true);
-  const [packetCount, setPacketCount] = useState(1420);
+  const [packetCount, setPacketCount] = useState(0);
   const [isPulseActive, setIsPulseActive] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
   const [realtimeClock, setRealtimeClock] = useState(() => {
     const d = new Date();
     return {
       utc: d.toISOString().slice(11, 19) + ' UTC',
-      met: `060:${d.toISOString().slice(11, 19)}`,
+      met: `042:${d.toISOString().slice(11, 19)}`,
     };
   });
 
-  // Firebase Real-time Cloud Database (active in background)
-  const firebaseActive = isFirebaseEnabled();
+  // API responses are authoritative. Optional Firebase sync is backend-only.
+  const firebaseActive = false;
 
-  // Telemetry View Mode: 24-Hour Hourly vs 60-Day Mission Baseline
+  // Telemetry view mode: hourly or stored mission history
   const [telemetryMode, setTelemetryMode] = useState<'hourly' | 'mission'>('hourly');
   const [hourlyTelemetry, setHourlyTelemetry] = useState<Any | null>(null);
 
@@ -177,7 +185,7 @@ export default function App() {
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('orbitcare-demo');
   const [regCallSign, setRegCallSign] = useState('');
-  const [regMission, setRegMission] = useState('Asteria-7');
+  const [regMission, setRegMission] = useState('Mars Transit');
   const [regSpecialization, setRegSpecialization] = useState('Mission Specialist');
   const [regBusy, setRegBusy] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
@@ -249,13 +257,13 @@ export default function App() {
   const [directUsername, setDirectUsername] = useState('');
   const [directPassword, setDirectPassword] = useState('orbitcare-demo');
   const [directCallSign, setDirectCallSign] = useState('');
-  const [directMission, setDirectMission] = useState('Asteria-7');
+  const [directMission, setDirectMission] = useState('Mars Transit');
   const [directSpecialization, setDirectSpecialization] = useState('Mission Specialist');
   const [directBusy, setDirectBusy] = useState(false);
   const [directSuccess, setDirectSuccess] = useState('');
   const [directError, setDirectError] = useState('');
 
-  // Clinical Medical Records state (Firebase & Database)
+  // Medical records returned by the authenticated API
   const [medicalRecords, setMedicalRecords] = useState<Any[]>([]);
   const [showAddMedRecordModal, setShowAddMedRecordModal] = useState(false);
   const [newMedRecord, setNewMedRecord] = useState({
@@ -264,13 +272,44 @@ export default function App() {
     physician: 'Dr. Robert Vance, Flight Surgeon',
     findings: '',
     countermeasures: '',
-    status: 'Signed & Verified',
+    status: 'Pending clinician review',
     date: new Date().toISOString().split('T')[0],
   });
   const [medRecordSubmitting, setMedRecordSubmitting] = useState(false);
 
   // Selected pill in the Mission Telemetry Trend card
   const [selectedMetric, setSelectedMetric] = useState('Heart Rate');
+
+  // Interactive Digital Twin: Handle organ selection & switch telemetry graph
+  const handleSelectOrgan = (organ: OrganKey) => {
+    setSelectedOrgan(organ);
+    if (organ === 'heart') {
+      setSelectedMetric('Heart Rate');
+    } else if (organ === 'lungs') {
+      setSelectedMetric('Cabin CO2');
+    } else if (organ === 'brain') {
+      setSelectedMetric('Sleep duration');
+    } else if (organ === 'muscles') {
+      setSelectedMetric('Grip');
+    } else if (organ === 'immune') {
+      setSelectedMetric('Radiation dose rate');
+    }
+  };
+
+  // Bidirectional sync: keep organ highlight in sync when user clicks any metric pill
+  useEffect(() => {
+    if (['Heart Rate', 'HRV', 'Systolic BP'].includes(selectedMetric)) {
+      setSelectedOrgan('heart');
+    } else if (['Cabin CO2'].includes(selectedMetric)) {
+      setSelectedOrgan('lungs');
+    } else if (['Sleep duration', 'Fatigue', 'Sleep quality', 'Stress', 'Mood'].includes(selectedMetric)) {
+      setSelectedOrgan('brain');
+    } else if (['Grip'].includes(selectedMetric)) {
+      setSelectedOrgan('muscles');
+    } else if (['Radiation dose rate', 'Core Temp'].includes(selectedMetric)) {
+      setSelectedOrgan('immune');
+    }
+  }, [selectedMetric]);
 
   // Role detection
   const isAdmin = user?.role === 'medical';
@@ -281,14 +320,10 @@ export default function App() {
   const [clearanceUpdating, setClearanceUpdating] = useState(false);
 
   // Astronaut Role: Daily Countermeasure Adherence state
-  const [adherenceChecks, setAdherenceChecks] = useState<Record<string, boolean>>(() => {
-    try {
-      const stored = localStorage.getItem('orbitcare_countermeasure_adherence');
-      return stored ? JSON.parse(stored) : { cardio: true, ared: false, hydration: true, circadian: false };
-    } catch {
-      return { cardio: true, ared: false, hydration: true, circadian: false };
-    }
-  });
+  const [adherenceChecks, setAdherenceChecks] = useState<Record<string, boolean>>({});
+  const [adherenceDate, setAdherenceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [adherenceLoading, setAdherenceLoading] = useState(false);
+  const [adherenceError, setAdherenceError] = useState('');
 
   // Astronaut Role: Telemedicine Consult state
   const [consultModalOpen, setConsultModalOpen] = useState(false);
@@ -358,33 +393,6 @@ export default function App() {
           throw apiErr;
         }
 
-        // 2. Demo fallback authentication for core accounts if server timed out or had connection delay
-        const isCoreUser = ['medical', 'maya', 'elena', 'david', 'astronaut'].includes(trimmedUser);
-        if (isCoreUser && enteredPass === 'orbitcare-demo') {
-          console.warn('Activating rapid demo flight clearance fallback for:', trimmedUser);
-          const role = trimmedUser === 'medical' ? 'medical' : 'astronaut';
-          const astroId = (trimmedUser === 'maya' || trimmedUser === 'astronaut') ? 1 : trimmedUser === 'elena' ? 2 : trimmedUser === 'david' ? 3 : null;
-          const fullName = trimmedUser === 'medical' ? 'Dr. Robert Vance' : trimmedUser === 'maya' ? 'Maya Chen' : trimmedUser === 'elena' ? 'Elena Rossi' : 'David Okafor';
-
-          const fallbackData = {
-            access_token: `demo-token-${trimmedUser}-${Date.now()}`,
-            role,
-            username: trimmedUser,
-            astronaut_id: astroId,
-            full_name: fullName,
-            status: 'approved',
-          };
-
-          setToken(fallbackData.access_token);
-          setUser(fallbackData);
-          localStorage.setItem('token', fallbackData.access_token);
-          localStorage.setItem('user', JSON.stringify(fallbackData));
-          setSelected(astroId);
-          setError('');
-          setLoginClearancePending(false);
-          return;
-        }
-
         throw apiErr;
       }
     } catch (x: any) {
@@ -412,7 +420,7 @@ export default function App() {
         password: regPassword,
         full_name: regFullName.trim(),
         call_sign: regCallSign.trim() || `CREW-${Math.floor(10 + Math.random() * 90)}`,
-        mission: regMission.trim() || 'Asteria-7',
+        mission: regMission.trim() || 'Mars Transit',
         specialization: regSpecialization.trim() || 'Mission Specialist',
       };
 
@@ -421,20 +429,6 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(payload),
       });
-
-      // 2. Submit to Firebase (Realtime Database + Firestore)
-      try {
-        await firebaseRegisterUser({
-          username: payload.username,
-          password: payload.password,
-          name: payload.full_name,
-          call_sign: payload.call_sign,
-          mission: payload.mission,
-          specialization: payload.specialization,
-        });
-      } catch (fbErr) {
-        console.warn('Firebase registration notice:', fbErr);
-      }
 
       setRegSuccess(true);
       setRegMessage(
@@ -462,14 +456,7 @@ export default function App() {
   async function handleApproveUser(targetUser: Any) {
     try {
       setAdminActionBusy(true);
-      const res = await api(`/admin/users/${targetUser.id}/approve`, { method: 'POST' });
-      const assignedAstroId = res.astronaut_id || targetUser.astronaut_id || 4;
-
-      try {
-        await firebaseApproveUser(targetUser.username, assignedAstroId, user?.username || 'medical');
-      } catch (e) {
-        console.warn('Firebase approve error:', e);
-      }
+      await api(`/admin/users/${targetUser.id}/approve`, { method: 'POST' });
 
       await load();
       await loadAdminUsers();
@@ -484,11 +471,6 @@ export default function App() {
     try {
       setAdminActionBusy(true);
       await api(`/admin/users/${targetUser.id}/reject`, { method: 'POST' });
-      try {
-        await firebaseRejectUser(targetUser.username);
-      } catch (e) {
-        console.warn('Firebase reject error:', e);
-      }
       await loadAdminUsers();
     } catch (e: any) {
       alert(`Rejection error: ${e.message}`);
@@ -509,7 +491,7 @@ export default function App() {
         username: directUsername.trim().toLowerCase(),
         password: directPassword || 'orbitcare-demo',
         call_sign: directCallSign.trim() || `ASTRO-${Math.floor(10 + Math.random() * 90)}`,
-        mission: directMission.trim() || 'Asteria-7',
+        mission: directMission.trim() || 'Mars Transit',
         specialization: directSpecialization.trim() || 'Mission Specialist',
       };
 
@@ -518,14 +500,7 @@ export default function App() {
         body: JSON.stringify(payload),
       });
 
-      const newAstroId = res.astronaut?.id;
-      try {
-        await firebaseDirectCreateAstronaut(payload, newAstroId);
-      } catch (e) {
-        console.warn('Firebase direct create notice:', e);
-      }
-
-      setDirectSuccess(`Astronaut ${payload.name} (${payload.call_sign}) successfully created and cleared for flight!`);
+      setDirectSuccess(`Astronaut ${payload.name} (${payload.call_sign}) created in the mission database.`);
       setDirectName('');
       setDirectUsername('');
       setDirectCallSign('');
@@ -550,7 +525,7 @@ export default function App() {
         physician: newMedRecord.physician || `Dr. ${user?.username?.toUpperCase() || 'VANCE'}, Flight Surgeon`,
         findings: newMedRecord.findings,
         countermeasures: newMedRecord.countermeasures,
-        status: newMedRecord.status || 'Signed & Verified',
+        status: 'Pending clinician review',
         date: newMedRecord.date || new Date().toISOString().split('T')[0],
       };
 
@@ -558,12 +533,6 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(payload),
       });
-
-      try {
-        await saveMedicalRecordToFirebase(selected, payload);
-      } catch (e) {
-        console.warn('Firebase medical record note:', e);
-      }
 
       await load();
       setShowAddMedRecordModal(false);
@@ -573,7 +542,7 @@ export default function App() {
         physician: 'Dr. Robert Vance, Flight Surgeon',
         findings: '',
         countermeasures: '',
-        status: 'Signed & Verified',
+        status: 'Pending clinician review',
         date: new Date().toISOString().split('T')[0],
       });
     } catch (e: any) {
@@ -586,11 +555,7 @@ export default function App() {
   async function load() {
     if (!token) return;
     try {
-      // 1. Fetch Astronauts directly from Firebase Cloud Database
-      let a = await firebaseGetAstronauts();
-      if (!a || !a.length) {
-        a = await api('/astronauts').catch(() => []);
-      }
+      const a = await api('/astronauts');
       if (a && a.length) {
         setAstronauts(a);
       }
@@ -602,45 +567,17 @@ export default function App() {
       setSelected(id);
 
       if (id) {
-        // 2. Fetch Measurements, Assessments, Medical Records, Alerts directly from Firebase
-        const [fbMeas, fbAss, fbRecs, fbAlerts] = await Promise.all([
-          firebaseGetMeasurements(id),
-          firebaseGetAssessments(id),
-          firebaseGetMedicalRecords(id),
-          firebaseGetAlerts(id),
+        const [m, ass, recs, l] = await Promise.all([
+          api(`/astronauts/${id}/measurements`),
+          api(`/astronauts/${id}/assessments`),
+          api(`/astronauts/${id}/medical-records`),
+          api(`/alerts?astronaut_id=${id}`),
         ]);
-
-        if (fbMeas && fbMeas.length) {
-          setMeasurements(fbMeas);
-          setPacketCount(fbMeas.length);
-        } else {
-          const m = await api(`/astronauts/${id}/measurements`).catch(() => []);
-          if (m && m.length) {
-            setMeasurements(m);
-            setPacketCount(m.length);
-          }
-        }
-
-        if (fbAss && fbAss.length) {
-          setAssessmentsList(fbAss);
-        } else {
-          const ass = await api(`/astronauts/${id}/assessments`).catch(() => []);
-          if (ass && ass.length) setAssessmentsList(ass);
-        }
-
-        if (fbRecs && fbRecs.length) {
-          setMedicalRecords(fbRecs);
-        } else {
-          const recs = await api(`/astronauts/${id}/medical-records`).catch(() => []);
-          if (recs && recs.length) setMedicalRecords(recs);
-        }
-
-        if (fbAlerts && fbAlerts.length) {
-          setAlerts(fbAlerts);
-        } else {
-          const l = await api(`/alerts?astronaut_id=${id}`).catch(() => []);
-          if (l && l.length) setAlerts(l);
-        }
+        setMeasurements(Array.isArray(m) ? m : []);
+        setPacketCount(Array.isArray(m) ? m.length : 0);
+        setAssessmentsList(Array.isArray(ass) ? ass : []);
+        setMedicalRecords(Array.isArray(recs) ? recs : []);
+        setAlerts(Array.isArray(l) ? l : []);
 
         const [b, t, d, hourly, warn] = await Promise.all([
           api(`/astronauts/${id}/baselines`).catch(() => []),
@@ -649,9 +586,9 @@ export default function App() {
           api(`/astronauts/${id}/telemetry/hourly?metric=Resting%20heart%20rate`).catch(() => null),
           api(`/astronauts/${id}/warnings`).catch(() => null),
         ]);
-        if (b && b.length) setBaselines(b);
-        if (t && t.length) setTimeline(t);
-        if (d && d.length) setDocs(d);
+        setBaselines(Array.isArray(b) ? b : []);
+        setTimeline(Array.isArray(t) ? t : []);
+        setDocs(Array.isArray(d) ? d : []);
         if (hourly) setHourlyTelemetry(hourly);
         if (warn) {
           setActiveWarnings(warn.abnormal_behaviours || []);
@@ -660,13 +597,7 @@ export default function App() {
         }
       }
 
-      // Load all registered users from Firebase
-      const u = await firebaseGetUsers();
-      if (u && u.length) {
-        setSystemUsers(u);
-      } else if (user?.role === 'medical') {
-        loadAdminUsers();
-      }
+      if (user?.role === 'medical') await loadAdminUsers();
     } catch (e: any) {
       setError(e.message);
     }
@@ -693,13 +624,6 @@ export default function App() {
       setBusy(false);
     }
   }
-
-  // Pre-load users on mount for dynamic role presets
-  useEffect(() => {
-    firebaseGetUsers().then((u) => {
-      if (u && u.length) setSystemUsers(u);
-    });
-  }, []);
 
   // Firebase Real-time Astronauts Subscription
   useEffect(() => {
@@ -783,6 +707,22 @@ export default function App() {
   const baseline = (metric: string) =>
     baselines.find((x: Any) => x.metric === metric);
 
+  // Real-time multi-domain vitals for the Digital Twin anatomical model
+  const liveVitals = useMemo(() => {
+    return {
+      heartRate: latest('Resting heart rate')?.value ?? 84.9,
+      hrv: latest('Heart rate variability')?.value ?? 42.1,
+      systolicBp: latest('Systolic blood pressure')?.value ?? 130,
+      diastolicBp: 85,
+      coreTemp: latest('Core body temperature')?.value ?? 37.1,
+      grip: latest('Grip strength')?.value ?? 44.2,
+      sleepHours: latest('Sleep duration')?.value ?? 5.2,
+      fatigue: latest('Fatigue')?.value ?? 7,
+      cabinCo2: latest('Cabin CO2')?.value ?? 0.38,
+      radiation: latest('Radiation dose rate')?.value ?? 0.42,
+    };
+  }, [measurements]);
+
   // Dynamic pill group depending on active sidebar tab
   const availablePills = useMemo(() => {
     if (tab === 'Cardiovascular') {
@@ -820,7 +760,7 @@ export default function App() {
       const d = new Date();
       setRealtimeClock({
         utc: d.toISOString().slice(11, 19) + ' UTC',
-        met: `060:${d.toISOString().slice(11, 19)}`,
+        met: `042:${d.toISOString().slice(11, 19)}`,
       });
     }, 1000);
     return () => clearInterval(timer);
@@ -846,28 +786,7 @@ export default function App() {
             method: 'POST',
             body: JSON.stringify({}),
           });
-        } catch {
-          // Client-side realistic micro-fluctuation fallback if server endpoint is unreachable
-          const latestHr =
-            measurements
-              .filter((m: Any) => m.metric === 'Resting heart rate')
-              .at(-1)?.value || 84.0;
-          const delta = (Math.random() - 0.48) * 1.2;
-          const newVal =
-            Math.round(Math.max(56, Math.min(115, latestHr + delta)) * 10) / 10;
-          tickData = {
-            id: Date.now(),
-            astronaut_id: targetId,
-            domain: 'cardiovascular',
-            metric: 'Resting heart rate',
-            value: newVal,
-            unit: 'bpm',
-            timestamp: new Date().toISOString(),
-            source: 'Live telemetry downlink',
-            quality: 'good',
-            simulated: false,
-          };
-        }
+        } catch { tickData = null; }
 
         if (tickData && tickData.value !== undefined) {
           setMeasurements((prev) => {
@@ -901,13 +820,8 @@ export default function App() {
             };
           });
 
-          setPacketCount((c) => c + 1);
           setLastSyncTime(new Date());
 
-          // Stream to Firebase in real-time if active
-          if (firebaseActive) {
-            streamTelemetryToFirebase(targetId, tickData).catch(() => { });
-          }
         }
       } catch (e) {
         console.warn('Real-time telemetry tick error:', e);
@@ -1004,7 +918,7 @@ export default function App() {
       user?.role !== 'medical' && user?.astronaut_id
         ? user.astronaut_id
         : selected || astronaut?.id || astronauts[0]?.id || 1;
-    if (!aid) return;
+    if (!aid || !firebaseActive) return;
 
     const unsub = subscribeToMedicalRecords(aid, (fbRecs) => {
       if (fbRecs && fbRecs.length > 0) {
@@ -1075,10 +989,10 @@ export default function App() {
     };
   }, [token, selected, user, astronaut, astronauts, backendMetric]);
 
-  // Compute 60-day telemetry curve, adaptive baseline, drift flags, domains & ticks dynamically
+  // Compute the stored mission-history curve and robust comparison band.
   const telemetryData = useMemo(() => {
     const filtered = measurements
-      .filter((m: Any) => m.metric === backendMetric)
+      .filter((m: Any) => m.metric === backendMetric && !['poor', 'invalid', 'unverified'].includes(String(m.quality || 'good').toLowerCase()))
       .sort((a: Any, b: Any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
     if (!filtered.length) {
@@ -1096,8 +1010,9 @@ export default function App() {
     const rawUnit = filtered[0].unit;
     const unit = rawUnit === 'bpm' ? 'BPM' : rawUnit;
 
-    // Rolling calibration window from the first 30 readings or available data
-    const calSlice = filtered.length >= 30 ? filtered.slice(0, 30) : filtered;
+    // Match backend baseline selection: exclude the latest three readings when
+    // there is enough history so recent drift does not redefine the baseline.
+    const calSlice = filtered.length >= 9 ? filtered.slice(0, -3) : filtered;
     const calValues = calSlice.map((m: Any) => Number(m.value)).sort((a: number, b: number) => a - b);
     const mid = Math.floor(calValues.length / 2);
     const calculatedMedian =
@@ -1112,7 +1027,7 @@ export default function App() {
         : diffs[mid];
 
     const median = Number(calculatedMedian.toFixed(1));
-    const scale = Math.max(1.4826 * (calculatedMad || 1.2), Math.abs(median) * 0.04, 0.2);
+    const scale = 2.5 * Math.max(1.4826 * calculatedMad, Math.abs(median) * 0.05, 0.01);
     const lower = Number((median - scale).toFixed(2));
     const upper = Number((median + scale).toFixed(2));
 
@@ -1294,7 +1209,7 @@ export default function App() {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const title = telemetryMode === 'hourly'
-        ? `${data.hour || label} · Mission Day 060${data.is_current ? ' (Live Downlink Signal)' : ''}`
+      ? `${data.hour || label} · Day 42 illustrative profile${data.is_current ? ' · latest stored reading' : ''}`
         : (data.dayFull || label);
 
       return (
@@ -1484,39 +1399,11 @@ export default function App() {
     setIsGeneratingReport(true);
     setReportSavedSuccess(false);
     try {
-      const rep = await api(`/astronauts/${targetId}/reports/daily?day=60`);
+      const rep = await api(`/astronauts/${targetId}/reports/daily?day=42`);
       setDailyReportData(rep);
       setDailyReportModalOpen(true);
     } catch (e: any) {
-      console.warn('Daily report fetch error:', e);
-      const targetAstro = astronauts.find((a: Any) => a.id === targetId) || astronaut;
-      setDailyReportData({
-        report_id: `CSR-2026-D060-A${targetId}`,
-        mission_day: 60,
-        date_str: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + ' · 12:00 UTC',
-        astronaut_id: targetId,
-        astronaut_name: targetAstro?.name || 'Astronaut',
-        call_sign: targetAstro?.call_sign || 'ORION-1',
-        mission: targetAstro?.mission || 'Asteria-7',
-        flight_readiness_score: flightReadinessScore,
-        overall_status: overallStatus,
-        executive_summary: `Daily clinical review for ${targetAstro?.name || 'Astronaut'} on Mission Day 060. Physiological monitoring shows ${activeWarnings.length} flagged active anomalies.`,
-        domain_assessments: {
-          cardiovascular: { title: 'Cardiovascular & Hemodynamics', status: activeWarnings.some(w => w.category === 'Cardiovascular') ? 'ELEVATED RISK' : 'NOMINAL', score: 65, findings: ['Resting HR adaptation and autonomic tone monitored.'] },
-          behavioural: { title: 'Neurocognitive & Behavioural State', status: activeWarnings.some(w => w.category === 'Behavioural & Sleep') ? 'ELEVATED RISK' : 'NOMINAL', score: 60, findings: ['Sleep architecture and cognitive fatigue tracked.'] },
-          musculoskeletal: { title: 'Musculoskeletal & Conditioning', status: 'NOMINAL', score: 90, findings: ['Isometric grip strength and body mass monitored.'] },
-          environmental: { title: 'Environmental & ECLSS Exposure', status: 'NOMINAL', score: 95, findings: ['Cabin atmospheric composition within safe limits.'] }
-        },
-        abnormal_behaviours: activeWarnings,
-        countermeasures: [
-          'Increase lower-body negative pressure (LBNP) or ergometer resistance loading by 15%.',
-          'Enforce 45-minute cabin LED circadian phase-shift and prescribe 0.5 mg melatonin pre-sleep.',
-          'Hydration protocol: 2.5 L electrolyte-enriched fluid loading.'
-        ],
-        physician: 'Dr. Robert Vance',
-        physician_title: 'Chief Flight Surgeon / Medical Officer'
-      });
-      setDailyReportModalOpen(true);
+      setError(`Could not load the daily data summary: ${e.message || 'backend unavailable'}`);
     } finally {
       setIsGeneratingReport(false);
     }
@@ -1525,7 +1412,7 @@ export default function App() {
   const handleSaveDailyReport = async (aid: number) => {
     setIsGeneratingReport(true);
     try {
-      await api(`/astronauts/${aid}/reports/daily/generate?day=60`, {
+      await api(`/astronauts/${aid}/reports/daily/generate?day=42`, {
         method: 'POST',
         body: JSON.stringify({}),
       });
@@ -1534,7 +1421,7 @@ export default function App() {
       if (recs && recs.length) setMedicalRecords(recs);
     } catch (e: any) {
       console.warn('Save report error:', e);
-      setReportSavedSuccess(true);
+      setError(`Could not save summary: ${e.message || 'backend unavailable'}`);
     } finally {
       setIsGeneratingReport(false);
     }
@@ -1582,15 +1469,29 @@ export default function App() {
     }
   };
 
-  // Astronaut Countermeasure Adherence toggle
-  const toggleAdherence = (key: string) => {
-    setAdherenceChecks((prev) => {
-      const updated = { ...prev, [key]: !prev[key] };
-      try {
-        localStorage.setItem('orbitcare_countermeasure_adherence', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+  const loadCountermeasures = async () => {
+    if (!token || !user?.astronaut_id) return;
+    setAdherenceLoading(true);
+    setAdherenceError('');
+    try {
+      const result = await api(`/astronauts/${user.astronaut_id}/countermeasures?date=${adherenceDate}`);
+      setAdherenceChecks(Object.fromEntries((result.items || []).map((item: Any) => [item.key, !!item.check?.completed])));
+    } catch (e: any) {
+      setAdherenceError(e.message || 'Could not load checklist records.');
+    } finally { setAdherenceLoading(false); }
+  };
+
+  useEffect(() => { loadCountermeasures(); }, [token, user?.astronaut_id, adherenceDate]);
+
+  const toggleAdherence = async (key: string) => {
+    if (!user?.astronaut_id) return;
+    setAdherenceError('');
+    try {
+      await api(`/astronauts/${user.astronaut_id}/countermeasures/${key}?date=${adherenceDate}`, {
+        method: 'PUT', body: JSON.stringify({ completed: !adherenceChecks[key] }),
+      });
+      setAdherenceChecks((prev) => ({ ...prev, [key]: !prev[key] }));
+    } catch (e: any) { setAdherenceError(e.message || 'Could not save checklist update.'); }
   };
 
   const adherenceCompletedCount = Object.values(adherenceChecks).filter(Boolean).length;
@@ -1607,7 +1508,7 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify({ note: consultNote.trim(), urgency: 'high' }),
       });
-      setConsultFeedback('✓ Telemedicine request transmitted to Chief Flight Surgeon Dr. Vance.');
+      setConsultFeedback('✓ Consultation request saved to the mission medical review queue.');
       setConsultNote('');
       setTimeout(() => {
         setConsultModalOpen(false);
@@ -1623,28 +1524,25 @@ export default function App() {
   // Admin Ability: Fleet Operational Readiness Triage Grid
   const renderFleetTriage = () => {
     if (!isAdmin) return null;
-    const items = fleetData.length ? fleetData : [
-      { astronaut: { id: 1, name: 'Maya Chen', call_sign: 'ORION-1', status: 'MEDICAL HOLD' }, flight_readiness_score: 35, overall_status: 'CRITICAL', abnormal_behaviours_count: 6, flight_clearance: 'MEDICAL HOLD' },
-      { astronaut: { id: 2, name: 'Elena Rossi', call_sign: 'VEGA-2', status: 'FLIGHT READY' }, flight_readiness_score: 92, overall_status: 'NOMINAL', abnormal_behaviours_count: 1, flight_clearance: 'FLIGHT READY' },
-      { astronaut: { id: 3, name: 'David Okafor', call_sign: 'NOVA-3', status: 'FLIGHT READY' }, flight_readiness_score: 84, overall_status: 'ELEVATED RISK', abnormal_behaviours_count: 2, flight_clearance: 'FLIGHT READY' },
-    ];
+    const items = fleetData;
+    if (!items.length) return <div className="empty">Fleet analytics are unavailable. Check the backend connection.</div>;
 
     return (
       <div className="fleet-triage-container">
         <div className="fleet-triage-header">
           <span className="fleet-triage-title">
-            <Users size={15} /> FLEET OPERATIONAL READINESS & CREW TRIAGE
+            <Users size={15} /> FLEET DATA COVERAGE & REVIEW QUEUE
           </span>
           <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: 'var(--text-muted)' }}>
-            Flight Surgeon Fleet Control · Click crew member to inspect telemetry & records
+            Prototype monitoring · select a crew member to inspect telemetry and records
           </span>
         </div>
         <div className="fleet-grid">
           {items.map((f: Any) => {
             const a = f.astronaut;
             const isCurrent = (selected || astronaut?.id || 1) === a.id;
-            const scoreClass = f.flight_readiness_score < 65 ? 'critical' : f.flight_readiness_score < 85 ? 'elevated' : 'nominal';
-            const clearance = f.flight_clearance || a.status || 'FLIGHT READY';
+            const scoreClass = 'nominal';
+            const clearance = f.flight_clearance || a.flight_clearance || 'UNREVIEWED';
             const clearanceClass = clearance === 'FLIGHT READY' ? 'ready' : clearance === 'RESTRICTED WORKLOAD' ? 'restricted' : 'hold';
 
             return (
@@ -1665,9 +1563,9 @@ export default function App() {
                   </div>
                   <div className="fleet-score-dial">
                     <span className={`fleet-score-num ${scoreClass}`}>
-                      {f.flight_readiness_score}%
+                      {f.monitoring_coverage ?? f.flight_readiness_score}%
                     </span>
-                    <span className="fleet-score-label">FRI Index</span>
+                    <span className="fleet-score-label">Data coverage</span>
                   </div>
                 </div>
 
@@ -1691,10 +1589,10 @@ export default function App() {
   const renderAstronautDutyCard = () => {
     if (!isUser) return null;
     const protocols = [
-      { key: 'cardio', title: 'T-2 Treadmill / Ergometer Session', desc: '45 min cardiovascular loading at 75-85% VO2 max', icon: '🏃‍♂️' },
-      { key: 'ared', title: 'ARED Advanced Resistive Exercise Protocol', desc: '45 min squats, deadlifts & heel raises (bone density stimulus)', icon: '🏋️‍♂️' },
-      { key: 'hydration', title: '2.5 L Electrolyte Hydration Target', desc: 'Microgravity plasma volume restoration loading', icon: '💧' },
-      { key: 'circadian', title: 'Circadian Light Visor & Melatonin Protocol', desc: 'Blue-depleted LED spectrum shift + 0.5mg melatonin', icon: '💡' },
+      { key: 'aerobic', title: 'Assigned aerobic session', desc: 'Check completion against your individual flight plan.', icon: '🏃‍♂️' },
+      { key: 'resistance', title: 'Assigned resistance session', desc: 'Check completion against your individual flight plan.', icon: '🏋️‍♂️' },
+      { key: 'hydration', title: 'Hydration check-in', desc: 'Use the guidance in your individual flight plan.', icon: '💧' },
+      { key: 'sleep', title: 'Sleep / circadian check-in', desc: 'Log the planned routine or any issue.', icon: '💡' },
     ];
 
     return (
@@ -1703,15 +1601,15 @@ export default function App() {
           <div className="duty-title">
             <Activity size={18} color="#0284c7" />
             <div>
-              <h3>Daily Spaceflight Countermeasure Adherence</h3>
-              <p>Mandatory 2.5h daily orbital countermeasures schedule for {astronaut?.name || 'astronaut'}.</p>
+              <h3>Daily mission check-ins</h3>
+              <p>Illustrative checklist for {astronaut?.name || 'astronaut'} · follow the individual flight plan.</p>
             </div>
           </div>
           <div className="adherence-bar-container">
             <div className="adherence-progress-track">
               <div className="adherence-progress-fill" style={{ width: `${adherencePercent}%` }} />
             </div>
-            <span className="adherence-percent">{adherencePercent}% Compliance ({adherenceCompletedCount}/4)</span>
+            <span className="adherence-percent">{adherencePercent}% recorded ({adherenceCompletedCount}/4)</span>
           </div>
         </div>
 
@@ -1722,7 +1620,12 @@ export default function App() {
               <div
                 key={p.key}
                 className={`checklist-item ${isDone ? 'completed' : ''}`}
+                role="checkbox"
+                aria-checked={isDone}
+                tabIndex={0}
                 onClick={() => toggleAdherence(p.key)}
+                onKeyDown={(e) => { if (!adherenceLoading && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleAdherence(p.key); } }}
+                aria-disabled={adherenceLoading}
               >
                 <div className="checklist-checkbox">
                   {isDone && <Check size={13} strokeWidth={3} />}
@@ -1737,6 +1640,11 @@ export default function App() {
             );
           })}
         </div>
+        <div className="checklist-footer">
+          <label>Checklist date <input type="date" value={adherenceDate} onChange={(e) => setAdherenceDate(e.target.value)} /></label>
+          <small>Self-reported completion; these items do not prescribe duration, dose, or treatment.</small>
+        </div>
+        {adherenceError && <p className="error">{adherenceError}</p>}
       </div>
     );
   };
@@ -1744,7 +1652,7 @@ export default function App() {
   // Reusable Abnormal Behaviour & Anomaly Warning Banner
   const renderAbnormalWarningBanner = () => {
     if (!activeWarnings || activeWarnings.length === 0) return null;
-    const isCritical = overallStatus === 'CRITICAL' || activeWarnings.some((w: Any) => w.severity === 'HIGH');
+    const isCritical = activeWarnings.some((w: Any) => w.severity === 'PRIORITY REVIEW');
     const targetAstro = astronauts.find((a: Any) => a.id === (selected || astronaut?.id || 1)) || astronaut;
 
     return (
@@ -1756,16 +1664,16 @@ export default function App() {
             </div>
             <div className="warning-banner-title">
               <h3>
-                {isCritical ? '⚠️ High Clinical Alert: Abnormal Crew Behaviour Detected' : '⚡ Attention Required: Physiological & Behavioral Deviation'}
+                {isCritical ? '⚠️ Priority review: baseline deviation detected' : '⚡ Baseline deviation for review'}
               </h3>
               <p>
-                Multi-system AI analysis flagged {activeWarnings.length} active abnormal physiological & circadian patterns for {targetAstro?.name || 'crew member'}.
+                Prototype monitoring flagged {activeWarnings.length} illustrative personal-baseline deviation(s) for {targetAstro?.name || 'crew member'}.
               </p>
             </div>
           </div>
           <div className="warning-readiness-badge">
             <span className="readiness-score-tag">{flightReadinessScore}%</span>
-            <span className="readiness-label-tag">Flight Readiness Index</span>
+            <span className="readiness-label-tag">Data coverage · not clearance</span>
           </div>
         </div>
 
@@ -1784,7 +1692,7 @@ export default function App() {
 
         <div className="warning-actions-row">
           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            Automated Clinical Guidance: Flight surgeon countermeasure protocol recommended.
+            Review the underlying measurements and sources; this prototype does not recommend treatment.
           </span>
           <button
             type="button"
@@ -1824,15 +1732,15 @@ export default function App() {
                   type="button"
                   className={`mode-toggle-btn ${!isHourly ? 'active' : ''}`}
                   onClick={() => setTelemetryMode('mission')}
-                  title="View 60-day longitudinal mission baseline trend"
+                  title="View stored mission history"
                 >
-                  📅 60-Day Mission
+                  📅 Mission history
                 </button>
               </div>
             </div>
             <p className="telemetry-subtitle">
               {isHourly
-                ? `Tracking 24-hour circadian telemetry for ${astronaut?.name || 'astronaut'} · Sol Day 60 (Live Downlink Active)`
+                ? `Illustrative generated hourly profile for ${astronaut?.name || 'astronaut'} · Mars Transit Day 42`
                 : (isAdmin
                     ? `Tracking longitudinal adaptation for ${astronaut?.name || 'astronaut'} relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`
                     : `Tracking your personal adaptation relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`)}
@@ -1867,10 +1775,10 @@ export default function App() {
           </div>
           <div className="live-strip-right">
             <span className="live-strip-packets">
-              Packets: <b>{packetCount}</b>
+              Stored readings: <b>{packetCount}</b>
             </span>
             <span className="live-strip-time">
-              Last tick: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              Last check: {lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
             <button
               type="button"
@@ -1918,7 +1826,7 @@ export default function App() {
 
               <XAxis
                 dataKey={isHourly ? 'hour' : 'day'}
-                ticks={isHourly ? ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:00'] : ['D1', 'D15', 'D30', 'D45', 'D60']}
+                ticks={isHourly ? ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:00'] : ['D1', 'D10', 'D20', 'D30', 'D42']}
                 axisLine={false}
                 tickLine={false}
                 tick={{
@@ -1990,17 +1898,15 @@ export default function App() {
             <span className="legend-item">
               <span className="legend-line baseline-line" /> Baseline Median
             </span>
-            <span className="legend-item">
-              <span className="legend-dot drift-dot" /> {isHourly ? 'Circadian Drift' : 'Baseline Drift'}
-            </span>
+              {!isHourly && <span className="legend-item"><span className="legend-dot drift-dot" /> Baseline deviation</span>}
             {isHourly && (
               <span className="legend-item">
-                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#0284c7', marginRight: 4 }} /> Current Live Hour
+                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#0284c7', marginRight: 4 }} /> Current hour marker
               </span>
             )}
           </div>
           <div className="telemetry-calibration">
-            {isHourly ? 'Circadian Downlink: Sol Day 060 (24-Hour Markers)' : 'Rolling Calibration Window: D1-D30'}
+            {isHourly ? 'Illustrative generated hourly profile · not stored telemetry' : 'Stored samples · comparison baseline excludes latest 3 readings'}
           </div>
         </div>
       </section>
@@ -2019,8 +1925,8 @@ export default function App() {
         <div className="clinical-modal-card" onClick={(e) => e.stopPropagation()}>
           <div className="clinical-modal-head">
             <div>
-              <div className="clinical-modal-brand">ASTERIA-7 · AEROSPACE MEDICINE & FLIGHT CLEARANCE</div>
-              <h2 className="clinical-modal-title">Daily Clinical Health Assessment Report</h2>
+              <div className="clinical-modal-brand">{dailyReportData.mission} · PROTOTYPE HEALTH MONITORING</div>
+              <h2 className="clinical-modal-title">Daily Health Data Summary</h2>
               <p className="clinical-modal-sub">
                 Report ID: <b>{dailyReportData.report_id}</b> · Mission Day {dailyReportData.mission_day} · Crew: <b>{dailyReportData.astronaut_name}</b> ({dailyReportData.call_sign})
               </p>
@@ -2035,11 +1941,11 @@ export default function App() {
           </div>
 
           <div className="clinical-modal-body">
-            {/* Flight Readiness Score Banner */}
+            {/* Prototype monitoring coverage */}
             <div className="report-score-banner">
               <div className={`score-dial ${statusClass}`}>
                 <span className="score-num">{dailyReportData.flight_readiness_score}</span>
-                <span className="score-unit">FRI / 100</span>
+                <span className="score-unit">DATA COVERAGE</span>
               </div>
               <div className="score-narrative">
                 <div className="score-badge-row">
@@ -2051,21 +1957,36 @@ export default function App() {
                   </span>
                 </div>
                 <p>{dailyReportData.executive_summary}</p>
+                <small>{dailyReportData.score_note}</small>
               </div>
             </div>
 
             {/* System-by-System Breakdown */}
             <div>
+              <div className="report-section-title"><FileText size={16} color="#0284c7" /> Source measurements and self-reports</div>
+              <div className="report-systems-grid">
+                {(dailyReportData.evidence || []).map((item: Any, idx: number) => (
+                  <div className="system-card" key={`${item.metric}-${idx}`}>
+                    <div className="system-card-top"><span className="system-name">{item.metric}</span><span>{item.simulated ? 'SIMULATED' : item.source}</span></div>
+                    <div>{item.value} {item.unit} · {item.timestamp ? fmt(item.timestamp) : 'time unavailable'}</div>
+                    <small>Baseline: {item.baseline_available ? `${item.baseline} ${item.unit} (n=${item.baseline_count})` : 'unavailable'} · source: {item.source}</small>
+                  </div>
+                ))}
+              </div>
+              {dailyReportData.missing_metrics?.length > 0 && <p className="muted">Missing / insufficient history: {dailyReportData.missing_metrics.join('; ')}</p>}
+            </div>
+
+            <div>
               <div className="report-section-title">
-                <Activity size={16} color="#0284c7" /> Multi-System Longitudinal Diagnostic Breakdown
+                <Activity size={16} color="#0284c7" /> Recorded observations by domain
               </div>
               <div className="report-systems-grid">
                 {dailyReportData.domain_assessments && Object.entries(dailyReportData.domain_assessments).map(([key, sys]: any) => (
                   <div key={key} className="system-card">
                     <div className="system-card-top">
                       <span className="system-name">{sys.title}</span>
-                      <span className={`system-status-pill ${sys.status === 'NOMINAL' ? 'nominal' : 'risk'}`}>
-                        {sys.status} · {sys.score}%
+                      <span className={`system-status-pill ${sys.status === 'Recorded observations' ? 'nominal' : 'risk'}`}>
+                        {sys.status}
                       </span>
                     </div>
                     <ul className="system-findings-list">
@@ -2082,7 +2003,7 @@ export default function App() {
             {dailyReportData.abnormal_behaviours && dailyReportData.abnormal_behaviours.length > 0 && (
               <div>
                 <div className="report-section-title">
-                  <AlertTriangle size={16} color="#ef4444" /> Flagged Abnormal Physiological & Behavioral Events ({dailyReportData.abnormal_behaviours.length})
+                <AlertTriangle size={16} color="#ef4444" /> Illustrative baseline deviations for review ({dailyReportData.abnormal_behaviours.length})
                 </div>
                 <div className="warning-items-grid">
                   {dailyReportData.abnormal_behaviours.map((b: Any, idx: number) => (
@@ -2099,27 +2020,19 @@ export default function App() {
               </div>
             )}
 
-            {/* Prescribed Spaceflight Countermeasures */}
-            <div className="countermeasures-box">
-              <div className="report-section-title" style={{ margin: 0 }}>
-                <CheckCircle2 size={16} color="#0284c7" /> Flight Surgeon Prescribed Countermeasure Protocol
-              </div>
-              <ul className="countermeasures-list">
-                {dailyReportData.countermeasures && dailyReportData.countermeasures.map((cm: string, idx: number) => (
-                  <li key={idx}>✓ {cm}</li>
-                ))}
-              </ul>
-            </div>
+            <div className="notice"><ShieldCheck size={16} /> Prototype-derived indicators are illustrative, not clinically validated, and do not determine flight clearance. Review the source data and individual flight plan.</div>
           </div>
 
           <div className="clinical-modal-foot">
             <div className="physician-signoff">
-              👨‍⚕️ Attending Physician: <b>{dailyReportData.physician}</b> ({dailyReportData.physician_title})
+              Summary status: <b>{dailyReportData.status || 'Generated · pending clinician review'}</b>
             </div>
             <div className="modal-actions-right">
-              {reportSavedSuccess ? (
+              {!isAdmin ? (
+                <span style={{ font: "500 12px 'DM Sans'", color: 'var(--text-muted)' }}>Medical officer review is required to save this summary.</span>
+              ) : reportSavedSuccess ? (
                 <span style={{ font: "700 12px 'DM Sans'", color: '#059669', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <CheckCircle2 size={15} /> Signed & Verified to Permanent Records!
+                  <CheckCircle2 size={15} /> Saved as a draft summary for clinician review.
                 </span>
               ) : (
                 <button
@@ -2128,7 +2041,7 @@ export default function App() {
                   disabled={isGeneratingReport}
                   onClick={() => handleSaveDailyReport(dailyReportData.astronaut_id)}
                 >
-                  {isGeneratingReport ? 'Signing & Saving...' : '✍️ Sign & Save to Medical Records'}
+                  {isGeneratingReport ? 'Saving summary…' : 'Save summary for review'}
                 </button>
               )}
               <button
@@ -2174,11 +2087,11 @@ export default function App() {
           </div>
 
           {/* Flight Surgeon Authority: Direct Flight Clearance Assignment */}
-          <div className="clearance-control-row" title="Flight Surgeon Clearance Authority">
+          <div className="clearance-control-row" title="Medical officer records explicit clearance status">
             <span className="clearance-control-label">Clearance:</span>
             <select
               className="clearance-select"
-              value={astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY'}
+              value={astronaut?.flight_clearance || 'UNREVIEWED'}
               disabled={clearanceUpdating}
               onChange={(e) => handleUpdateClearance(astronaut?.id || selected || 1, e.target.value)}
             >
@@ -2201,8 +2114,8 @@ export default function App() {
             Call Sign: <b>{astronaut?.call_sign}</b> · Mission: <b>{astronaut?.mission || 'Asteria-7'}</b>
           </div>
           <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span className={`clearance-pill ${(astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY') === 'FLIGHT READY' ? 'ready' : (astronaut?.flight_clearance || astronaut?.status) === 'RESTRICTED WORKLOAD' ? 'restricted' : 'hold'}`}>
-              ● CLEARANCE: {astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY'}
+            <span className={`clearance-pill ${(astronaut?.flight_clearance || 'UNREVIEWED') === 'FLIGHT READY' ? 'ready' : (astronaut?.flight_clearance || 'UNREVIEWED') === 'RESTRICTED WORKLOAD' ? 'restricted' : 'hold'}`}>
+              ● CLEARANCE: {astronaut?.flight_clearance || 'UNREVIEWED'}
             </span>
             <button
               type="button"
@@ -2225,6 +2138,350 @@ export default function App() {
       </button>
     </div>
   );
+
+  // Liquid Glass Digital Twin Master Component (with Reduced Telemetry Graph & Interactive Anatomical Body)
+  const renderLiquidGlassDigitalTwinSection = () => {
+    const isHourly = telemetryMode === 'hourly';
+    const activePoints = isHourly ? hourlyChartData.points : telemetryData.points;
+    const activeDomain = isHourly ? hourlyChartData.domain : telemetryData.domain;
+    const activeTicks = isHourly ? hourlyChartData.ticks : telemetryData.ticks;
+    const currentVal = latest(backendMetric)?.value ?? latest(selectedMetric)?.value ?? activePoints.at(-1)?.value ?? liveVitals.heartRate;
+
+    return (
+      <section className="liquid-glass-atmosphere">
+        {/* Top Biometrics Floating Bar (Reference ClyHealth design) */}
+        <div className="glass-biometrics-bar">
+          <div className="glass-brand-block">
+            <div className="glass-brand-logo">
+              <Sparkles size={18} color="#0d9488" /> OrbitCare
+            </div>
+            <div className="glass-crumb">
+              <span>/</span> System Reports <span>/</span> Physiological Risk & Digital Twin
+            </div>
+          </div>
+
+          <div className="glass-biometrics-pills">
+            <div className="bio-pill">
+              <span className="bio-pill-label">Biological age</span>
+              <span className="bio-pill-value">
+                47 <span className="bio-pill-unit">yrs</span>
+              </span>
+            </div>
+
+            <div className="bio-pill">
+              <span className="bio-pill-label">Chronological age</span>
+              <span className="bio-pill-value">
+                42 <span className="bio-pill-unit">yrs</span>
+              </span>
+            </div>
+
+            <div className="bio-pill">
+              <span className="bio-pill-label">Sex</span>
+              <span className="bio-pill-value">
+                {astronaut?.call_sign?.includes('2') ? 'Female ♀' : 'Male ♂'}
+              </span>
+            </div>
+
+            <div className="bio-pill">
+              <span className="bio-pill-label">Body Mass</span>
+              <span className="bio-pill-value">
+                74.5 <span className="bio-pill-unit">kg</span>
+                <span className="bio-pill-delta">▲ +1.2 kg</span>
+              </span>
+            </div>
+
+            <div className="glass-aging-alert-pill" title="Microgravity cardiovascular baseline shift">
+              <span>⚠️ Cardiovascular drift:</span>
+              <strong>+18.5% above baseline</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Two-Column Master Grid: Left: Risk Cards & Reduced Graph; Right: Digital Twin Body */}
+        <div className="digital-twin-layout">
+          {/* Left Column: Risk Score, Contributing Factors, Reduced Graph & Domain Risk Cards */}
+          <div className="twin-left-col">
+            {/* Top Row: Risk Score + Why The Risk? */}
+            <div className="risk-cards-grid">
+              {/* Card 1: Methylation / Spaceflight Risk Score */}
+              <div className="glass-panel-card">
+                <div className="glass-panel-head">
+                  <h4 className="glass-panel-title">Physiological Risk Score</h4>
+                  <span className="risk-level-tag moderate">● Moderate Risk</span>
+                </div>
+
+                <div className="risk-score-display">
+                  <div className="risk-big-score">
+                    0.74% <small>/ 45 Actual age</small>
+                  </div>
+                  <div style={{ textAlign: 'right', font: '600 11px sans-serif', color: 'var(--text-muted)' }}>
+                    Risk Index: <b>74/100</b>
+                  </div>
+                </div>
+
+                {/* Gradient Risk Bar with Needle Pin */}
+                <div className="risk-gradient-track">
+                  <div className="risk-needle-pin" style={{ left: '74%' }} title="Current Risk Level: 74%" />
+                </div>
+
+                <div className="risk-range-labels">
+                  <span>0 (Low)</span>
+                  <span>30</span>
+                  <span>100 (High)</span>
+                </div>
+
+                <p className="risk-narrative-text">
+                  {astronaut?.name || 'Astronaut'} exhibits elevated cardiovascular drift and sleep disruption under microgravity conditions, placing mission readiness in the moderate monitoring bracket.
+                </p>
+
+                <div className="risk-areas-row">
+                  <span className="risk-area-pill critical">● Tachycardia Drift</span>
+                  <span className="risk-area-pill critical">● Blood Pressure</span>
+                  <span className="risk-area-pill warning">● Sleep Debt</span>
+                  <span className="risk-area-pill nominal">● Bone Density</span>
+                </div>
+              </div>
+
+              {/* Card 2: Why The Risk? Contributing Factors */}
+              <div className="glass-panel-card">
+                <div className="glass-panel-head">
+                  <h4 className="glass-panel-title">Why The Risk?</h4>
+                  <button
+                    type="button"
+                    className="glass-panel-link-btn"
+                    onClick={() => handleTabChange('Medical records')}
+                  >
+                    View records
+                  </button>
+                </div>
+
+                <div className="contributing-factors-list">
+                  <div className="factor-item">
+                    <span className="factor-bullet red" />
+                    <div>
+                      <div className="factor-title-row">
+                        <span className="factor-name">Elevated Resting HR</span>
+                        <span className="factor-val">{liveVitals.heartRate.toFixed(1)} BPM</span>
+                      </div>
+                      <div className="factor-desc">Increases cardiac load and autonomic sympathetic baseline drift under LEO.</div>
+                    </div>
+                  </div>
+
+                  <div className="factor-item">
+                    <span className="factor-bullet amber" />
+                    <div>
+                      <div className="factor-title-row">
+                        <span className="factor-name">Cephalad Blood Pressure</span>
+                        <span className="factor-val">{liveVitals.systolicBp.toFixed(0)}/85 mmHg</span>
+                      </div>
+                      <div className="factor-desc">Microgravity headward fluid redistribution creates vascular tension.</div>
+                    </div>
+                  </div>
+
+                  <div className="factor-item">
+                    <span className="factor-bullet amber" />
+                    <div>
+                      <div className="factor-title-row">
+                        <span className="factor-name">Sleep & Circadian Disruption</span>
+                        <span className="factor-val">{liveVitals.sleepHours.toFixed(1)} hrs/night</span>
+                      </div>
+                      <div className="factor-desc">Elevates operational fatigue ({liveVitals.fatigue}/10) and neurocognitive strain.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Middle Row: Reduced-Width Telemetry Trend Graph */}
+            <div className="reduced-telemetry-container">
+              <div className="reduced-telemetry-header">
+                <div className="reduced-telemetry-title-block">
+                  <h3>
+                    Telemetry Trend: {selectedMetric}
+                    <span className="organ-tag-badge">
+                      {selectedOrgan.toUpperCase()} TARGET
+                    </span>
+                  </h3>
+                  <p className="telemetry-subtitle" style={{ margin: 0 }}>
+                    {isHourly
+                      ? `24-hour circadian telemetry profile · ${selectedMetric} (${telemetryData.unit})`
+                      : `60-day longitudinal mission adaptation relative to calibrated baseline (${telemetryData.median} ${telemetryData.unit})`}
+                  </p>
+                </div>
+
+                {/* Controls: Mode Toggle */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div className="telemetry-mode-toggle">
+                    <button
+                      type="button"
+                      className={`mode-toggle-btn ${isHourly ? 'active' : ''}`}
+                      onClick={() => setTelemetryMode('hourly')}
+                    >
+                      ⏱️ 24-Hour
+                    </button>
+                    <button
+                      type="button"
+                      className={`mode-toggle-btn ${!isHourly ? 'active' : ''}`}
+                      onClick={() => setTelemetryMode('mission')}
+                    >
+                      📅 60-Day
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metric selection pills for the active organ */}
+              <div className="telemetry-pills" style={{ marginTop: 4, marginBottom: 8 }}>
+                {availablePills.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`pill-btn ${selectedMetric === p ? 'active' : ''}`}
+                    onClick={() => setSelectedMetric(p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+
+              {/* Live Downlink Ticker */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'rgba(13, 148, 136, 0.05)', borderRadius: 8, fontSize: '11.5px', color: 'var(--text-muted)', marginBottom: 8 }}>
+                <span>
+                  <b>Live Telemetry:</b> {currentVal ?? '—'} {telemetryData.unit}
+                </span>
+                <span>LEO Downlink: 0.25 Hz · Packets: {packetCount}</span>
+              </div>
+
+              {/* The Reduced Recharts Chart */}
+              <div className="reduced-chart-stage">
+                <ResponsiveContainer width="100%" height={230}>
+                  <AreaChart data={activePoints} margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="reduced-fill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#0284c7" stopOpacity={0.28} />
+                        <stop offset="100%" stopColor="#0284c7" stopOpacity={0.01} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
+                    <XAxis dataKey="dayLabel" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                    <YAxis domain={activeDomain} ticks={activeTicks} stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const d = payload[0].payload;
+                          return (
+                            <div className="chart-tooltip">
+                              <div className="tooltip-title">{d.dayLabel}</div>
+                              <div className="tooltip-value">
+                                {d.value} {d.unit}
+                              </div>
+                              {d.isDrift && (
+                                <div className="tooltip-drift-tag">⚠️ Drift Detected</div>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <ReferenceLine y={telemetryData.median} stroke="#0284c7" strokeDasharray="4 4" strokeWidth={1.4} />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#0284c7"
+                      strokeWidth={2.4}
+                      fill="url(#reduced-fill)"
+                      dot={<CustomDot />}
+                      activeDot={{ r: 5, fill: '#0284c7', stroke: '#ffffff', strokeWidth: 2 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Bottom Row: 3 Epigenetic / Physiological Disease Risk Profile Cards */}
+            <div className="domain-risk-profile-grid">
+              {/* Card 1: Metabolic & Fluid */}
+              <div
+                className={`domain-risk-card ${selectedOrgan === 'immune' ? 'active' : ''}`}
+                onClick={() => handleSelectOrgan('immune')}
+              >
+                <div>
+                  <div className="domain-risk-card-head">
+                    <span className="domain-risk-title">
+                      <Shield size={14} color="#f59e0b" /> Fluid & Metabolic
+                    </span>
+                    <span className="domain-risk-pill suboptimal">Suboptimal</span>
+                  </div>
+                  <div className="domain-risk-percentile">
+                    <div className="percentile-label">Physiological Load</div>
+                    <div className="percentile-val">44th percentile</div>
+                  </div>
+                </div>
+                <div className="domain-countermeasure-action">
+                  <span><strong>Hydration:</strong> 2.5L oral electrolyte loading</span>
+                </div>
+              </div>
+
+              {/* Card 2: Neurocognitive & Sleep */}
+              <div
+                className={`domain-risk-card ${selectedOrgan === 'brain' ? 'active' : ''}`}
+                onClick={() => handleSelectOrgan('brain')}
+              >
+                <div>
+                  <div className="domain-risk-card-head">
+                    <span className="domain-risk-title">
+                      <Brain size={14} color="#8b5cf6" /> Neurocognitive
+                    </span>
+                    <span className="domain-risk-pill suboptimal">Fatigue 7/10</span>
+                  </div>
+                  <div className="domain-risk-percentile">
+                    <div className="percentile-label">Circadian Quality</div>
+                    <div className="percentile-val">12th percentile</div>
+                  </div>
+                </div>
+                <div className="domain-countermeasure-action">
+                  <span><strong>Circadian:</strong> 45 min 480nm LED phase shift</span>
+                </div>
+              </div>
+
+              {/* Card 3: Cardiovascular */}
+              <div
+                className={`domain-risk-card ${selectedOrgan === 'heart' ? 'active' : ''}`}
+                onClick={() => handleSelectOrgan('heart')}
+              >
+                <div>
+                  <div className="domain-risk-card-head">
+                    <span className="domain-risk-title">
+                      <Heart size={14} color="#ef4444" /> Cardiovascular
+                    </span>
+                    <span className="domain-risk-pill critical">Critical</span>
+                  </div>
+                  <div className="domain-risk-percentile">
+                    <div className="percentile-label">Cardiovascular Drift</div>
+                    <div className="percentile-val">91st percentile</div>
+                  </div>
+                </div>
+                <div className="domain-countermeasure-action">
+                  <span><strong>Exercise:</strong> 45 min ARED + Ergometer</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Interactive Digital Twin Body Model */}
+          <div className="twin-right-col">
+            <DigitalTwinViewer
+              selectedOrgan={selectedOrgan}
+              onSelectOrgan={handleSelectOrgan}
+              astronautName={astronaut?.name}
+              vitals={liveVitals}
+            />
+          </div>
+        </div>
+      </section>
+    );
+  };
 
   const pendingUsers = systemUsers.filter((u: Any) => u.status === 'pending_approval');
   const pendingApplicantsCount = pendingUsers.length;
@@ -2529,7 +2786,7 @@ export default function App() {
         </nav>
         <div className="sidebar-bottom">
           <div className={`live ${isPulseActive ? 'pulse-tick' : ''}`}>
-            <i /> {liveStreaming ? (isAdmin ? 'REAL-TIME TELEMETRY LIVE' : 'TELEMETRY DOWNLINK ACTIVE') : 'DOWNLINK STREAM PAUSED'}
+            <i /> {liveStreaming ? 'STORED SAMPLE REFRESH ACTIVE' : 'SAMPLE REFRESH PAUSED'}
           </div>
           <div className="profile">
             <div className="avatar">{isAdmin ? 'MO' : 'AS'}</div>
@@ -2618,7 +2875,7 @@ export default function App() {
               <div className="heading-row">
                 <div>
                   <div className="eyebrow">
-                    MISSION DAY 060 <span className="sep">·</span> LOW EARTH ORBIT <span className="sep">·</span>{' '}
+                    MARS TRANSIT · DAY 042 <span className="sep">·</span> SIMULATED SCENARIO <span className="sep">·</span>{' '}
                     {isAdmin ? 'FLIGHT SURGEON OVERVIEW' : 'ASTRONAUT TELEMETRY'}
                   </div>
                   <h1>
@@ -2626,7 +2883,7 @@ export default function App() {
                   </h1>
                   <p className="muted">
                     {isAdmin
-                      ? `Comprehensive flight surgeon overview, telemetry alerts, and baseline drift across Asteria-7 crew.`
+                      ? `Prototype monitoring summary, data coverage, and personal-baseline comparisons across the Mars Transit crew.`
                       : `Personal health signals, baseline comparisons, and telemetry for ${astronaut?.name}.`}
                   </p>
                 </div>
@@ -2700,7 +2957,7 @@ export default function App() {
                     <Atom size={17} />
                   </div>
                   <strong>
-                    DAY 60 <small>of 180</small>
+                    DAY 42 <small>of 180 (demo)</small>
                   </strong>
                   <div className="stat-foot">ASTERIA-7 · Low Earth Orbit</div>
                 </div>
@@ -2709,8 +2966,8 @@ export default function App() {
               {/* Abnormal Behaviour Warning Banner */}
               {renderAbnormalWarningBanner()}
 
-              {/* Telemetry Trend Graph */}
-              {renderTelemetryCard()}
+              {/* Liquid Glass Digital Twin & Reduced Telemetry Trend */}
+              {renderLiquidGlassDigitalTwinSection()}
 
               <div className="grid-main">
                 <section className="panel alert-panel">
@@ -2925,8 +3182,7 @@ export default function App() {
                           : 'My Measurements & Baselines'}
                       </h2>
                       <p className="muted">
-                        Click any measurement row below to visualize its 60-day adaptive
-                        trend graph above.
+                        Click a measurement row to compare its stored history with the personal baseline above.
                       </p>
                     </div>
                   </div>
@@ -3143,7 +3399,7 @@ export default function App() {
                     <div className="telemetry-title-row">
                       <h2>Neurocognitive & Sleep Adaptation Trend</h2>
                       <span className="telemetry-badge">
-                        {assessmentsList.length || 60}-Day Longitudinal Self-Reports
+                        {assessmentsList.length || 42}-Day Longitudinal Self-Reports
                       </span>
                     </div>
                     <p className="telemetry-subtitle">
@@ -3202,9 +3458,9 @@ export default function App() {
                       <XAxis
                         dataKey="day"
                         ticks={
-                          assessmentsList.length > 60
+                          assessmentsList.length > 42
                             ? ['D1', 'D15', 'D30', 'D45', `D${assessmentsList.length}`]
-                            : ['D1', 'D15', 'D30', 'D45', 'D60']
+                            : ['D1', 'D10', 'D20', 'D30', 'D42']
                         }
                         axisLine={false}
                         tickLine={false}
@@ -3279,7 +3535,7 @@ export default function App() {
                   </div>
 
                   <div className="telemetry-window-note">
-                    Mission Timeline: D1–D{assessmentsList.length || 60} ({assessmentsList.length} logs recorded)
+                    Mission Timeline: D1–D{assessmentsList.length || 42} ({assessmentsList.length} logs recorded)
                   </div>
                 </div>
               </section>
@@ -3409,44 +3665,14 @@ export default function App() {
                         symptoms: symptomsVal,
                       };
 
-                      const optimisticEntry: Any = {
-                        id: Date.now(),
-                        astronaut_id: targetId,
-                        ...payload,
-                        timestamp: new Date().toISOString(),
-                        source: 'Astronaut self-report',
-                        simulated: false,
-                      };
-
                       try {
-                        let created: Any | null = null;
-                        try {
-                          created = await api(`/astronauts/${targetId}/assessments`, {
-                            method: 'POST',
-                            body: JSON.stringify(payload),
-                          });
-                        } catch (err: any) {
-                          console.warn('Backend POST assessment failed, using optimistic entry:', err);
-                        }
-
-                        const finalEntry = (created && created.id) ? created : optimisticEntry;
-
-                        // Immediately append to state for zero-latency UI update
-                        setAssessmentsList((prev) => {
-                          const updated = [...prev, finalEntry];
-
-                          // If Firebase Cloud Database is active, save to Firestore in real-time!
-                          if (firebaseActive) {
-                            saveAssessmentToFirebase(targetId, payload).catch((e) =>
-                              console.warn('Firebase save error:', e)
-                            );
-                          }
-
-                          return updated;
+                        const created = await api(`/astronauts/${targetId}/assessments`, {
+                          method: 'POST', body: JSON.stringify(payload),
                         });
+                        setAssessmentsList((prev) => [...prev, created]);
 
                         setAssessmentFeedback(
-                          `Assessment successfully recorded for Mission Day 60 (${symptomsVal})!`
+                          `Assessment saved to the mission database (${symptomsVal}).`
                         );
                         setTimeout(() => setAssessmentFeedback(''), 8000);
 
@@ -3499,11 +3725,11 @@ export default function App() {
                       {assessmentsList.slice(-15).reverse().map((a: Any, i: number) => {
                         const isLatest = i === 0;
                         const dayNum =
-                          a.id && a.id >= 1 && a.id <= 60 && a.simulated
+                          a.id && a.id >= 1 && a.id <= 42 && a.simulated
                             ? a.id
                             : !a.simulated
-                              ? 60
-                              : Math.min(60, Math.max(1, assessmentsList.length - i));
+                              ? 42
+                              : Math.min(42, Math.max(1, assessmentsList.length - i));
                         return (
                           <tr
                             key={a.id || i}
@@ -3612,8 +3838,8 @@ export default function App() {
                   <h1>Medical Records & Clinical Evaluations</h1>
                   <p className="muted">
                     {isAdmin
-                      ? `Longitudinal clinical evaluations, countermeasure protocols, and certified medical reports for ${astronaut?.name}.`
-                      : 'Your certified flight medical history, physician evaluations, and prescribed microgravity countermeasures.'}
+                      ? `Medical officer records, reviewable document extracts, and prototype summaries for ${astronaut?.name}.`
+                      : 'Your medical records and extracted document observations, with review status shown.'}
                   </p>
                 </div>
                 {renderHeaderCrewControls(
@@ -3662,7 +3888,7 @@ export default function App() {
                       <label>
                         Record Title
                         <input
-                          placeholder="e.g. Day 60 Post-EVA Orthostatic & Cardiovascular Assessment"
+                          placeholder="e.g. Day 42 cardiovascular observations"
                           value={newMedRecord.title}
                           onChange={(e) => setNewMedRecord({ ...newMedRecord, title: e.target.value })}
                           required
@@ -3753,7 +3979,7 @@ export default function App() {
                     <div className="eyebrow">MISSION MEDICAL DATABASE</div>
                     <h2>Clinical Evaluations & Countermeasure Protocols ({medicalRecords.length})</h2>
                     <p className="muted">
-                      Stored in primary database & synchronized with Firebase Cloud in real time.
+                      Stored in the mission database. Optional Firebase sync requires backend credentials.
                     </p>
                   </div>
                 </div>
@@ -3772,10 +3998,10 @@ export default function App() {
                           <h3 className="med-record-title">{r.title}</h3>
                           <div className="med-record-physician">
                             <Stethoscope size={13} style={{ display: 'inline', marginRight: 4 }} />
-                            Signed by: <b>{r.physician || 'Flight Surgeon'}</b>
+                            Entered by: <b>{r.physician || 'Medical officer'}</b>{r.simulated ? ' · SIMULATED' : ''}
                           </div>
                         </div>
-                        <span className="status-pill approved">{r.status || 'Signed & Verified'}</span>
+                        <span className={`status-pill ${String(r.status || '').toLowerCase().includes('pending') ? 'pending_approval' : 'approved'}`}>{r.status || 'Pending clinician review'}</span>
                       </div>
 
                       <div className="med-record-findings">
@@ -3829,11 +4055,11 @@ export default function App() {
                           if (f && selected) {
                             const fd = new FormData();
                             fd.append('file', f);
-                            await api(`/astronauts/${selected}/documents`, {
-                              method: 'POST',
-                              body: fd,
-                            });
-                            load();
+                            try {
+                              await api(`/astronauts/${selected}/documents`, { method: 'POST', body: fd });
+                              setError('');
+                              await load();
+                            } catch (e: any) { setError(e.message || 'PDF upload failed.'); }
                           }
                         }}
                       />
@@ -3847,12 +4073,24 @@ export default function App() {
                     <div>
                       <b>{d.filename}</b>
                       <p>
-                        {d.verified
-                          ? 'Verified by medical officer'
-                          : 'Pending human review'}{' '}
-                        · extraction confidence {Math.round(d.confidence * 100)}%
+                        {d.simulated ? 'SIMULATED DEMO DOCUMENT · ' : ''}{d.verified ? 'Document reviewed' : 'Pending human review'}
+                        {' · '}{d.extraction_method || 'text extraction'} · extraction confidence {Math.round(d.confidence * 100)}%
                       </p>
                       <pre>{d.extracted_text}</pre>
+                      {(d.observations || []).map((o: Any) => {
+                        const edit = observationEdits[o.id] || o;
+                        return <div className="observation-review" key={o.id}>
+                          <div className="observation-review-meta">Extracted candidate · confidence {Math.round((o.confidence || 0) * 100)}% · {o.review_status || 'pending review'}{o.verified ? ' · human approved' : ''}</div>
+                          {isAdmin ? <div className="observation-review-fields">
+                            <input aria-label="Observation name" value={edit.test_name || ''} onChange={(e) => setObservationEdits((prev) => ({ ...prev, [o.id]: { ...edit, test_name: e.target.value } }))} />
+                            <input aria-label="Observation result" value={edit.result || ''} onChange={(e) => setObservationEdits((prev) => ({ ...prev, [o.id]: { ...edit, result: e.target.value } }))} />
+                            <input aria-label="Observation unit" value={edit.unit || ''} onChange={(e) => setObservationEdits((prev) => ({ ...prev, [o.id]: { ...edit, unit: e.target.value } }))} />
+                            <input aria-label="Reference range" value={edit.reference_range || ''} onChange={(e) => setObservationEdits((prev) => ({ ...prev, [o.id]: { ...edit, reference_range: e.target.value } }))} />
+                            <button type="button" className="ack" onClick={async () => { try { await api(`/observations/${o.id}/verify`, { method: 'POST', body: JSON.stringify({ ...edit, review_note: 'Reviewed in medical officer interface' }) }); setObservationEdits((prev) => { const next = { ...prev }; delete next[o.id]; return next; }); await load(); } catch (e: any) { setError(e.message || 'Could not approve observation.'); } }}>Approve candidate</button>
+                            <button type="button" className="btn-secondary" onClick={async () => { try { await api(`/observations/${o.id}/reject`, { method: 'POST', body: JSON.stringify({ review_note: 'Rejected in medical officer interface' }) }); await load(); } catch (e: any) { setError(e.message || 'Could not reject observation.'); } }}>Reject</button>
+                          </div> : <div><b>{o.test_name}</b>: {o.result} {o.unit} · reference {o.reference_range}</div>}
+                        </div>;
+                      })}
                     </div>
                     {isAdmin && !d.verified && (
                       <button
@@ -3862,7 +4100,7 @@ export default function App() {
                           load();
                         }}
                       >
-                        Verify
+                        Mark document reviewed
                       </button>
                     )}
                   </div>
@@ -4024,7 +4262,7 @@ export default function App() {
                   {directSuccess && <p style={{ color: '#0d9488', font: '600 12px sans-serif', marginBottom: 10 }}>{directSuccess}</p>}
 
                   <button type="submit" disabled={directBusy} className="btn-approve" style={{ width: 'auto', padding: '9px 18px' }}>
-                    <Plus size={14} /> Provision & Clear Astronaut
+                    <Plus size={14} /> Provision Crew Profile
                   </button>
                 </form>
               </section>
@@ -4132,20 +4370,17 @@ export default function App() {
                   </div>
                   <div>
                     <div className="eyebrow">
-                      {isAdmin
-                        ? 'FLIGHT SURGEON AI ASSISTANT'
-                        : 'CREW PERSONAL HEALTH ASSISTANT'}
+                      {assistantStatus?.mode || 'ASSISTANT MODE UNKNOWN'} · {isAdmin ? 'MEDICAL OFFICER' : 'CREW'}
                     </div>
                     <h2>
                       {isAdmin
                         ? `Ask about ${astronaut?.name}'s health signals`
                         : 'Ask about your mission health'}
                     </h2>
-                    <p>
-                      {assistantStatus?.configured
-                        ? `Gemini is enabled (${assistantStatus.model}). Answers are grounded in retrieved project records.`
-                        : 'Local evidence mode is ready. Add a Gemini key to enable generated explanations; record lookup works without it.'}
-                    </p>
+                    <p>{assistantStatus?.configured
+                      ? `Gemini (${assistantStatus.model}) is available. Replies use retrieved project records.`
+                      : assistantStatus ? 'Responses are generated from available local project records. Add a Gemini API key on the backend for live AI explanations.'
+                      : 'Assistant mode could not be checked. Verify the backend connection.'}</p>
                   </div>
                 </div>
                 <form className="assistant-form" onSubmit={askAssistant}>
@@ -4154,6 +4389,9 @@ export default function App() {
                       'Summarize recent health changes',
                       'What evidence supports the open alerts?',
                       'How has sleep changed from baseline?',
+                      'Summarize the last 7 days',
+                      'Summarize medical records',
+                      'Explain the mission timeline',
                     ].map((x) => (
                       <button key={x} type="button" onClick={() => setQuestion(x)}>
                         {x}
@@ -4222,7 +4460,7 @@ export default function App() {
                 <div className="clinical-modal-brand">ORBITCARE TELEMEDICINE · MISSION CONTROL LINK</div>
                 <h3>Request Flight Surgeon Consultation</h3>
                 <p>
-                  Direct priority uplink to <b>Dr. Robert Vance</b> (Chief Medical Officer). State any subjective symptoms, operational fatigue, or physical concerns.
+                Send a consultation request to the mission medical review queue. State any symptoms, fatigue, or concerns you want reviewed.
                 </p>
               </div>
               <button

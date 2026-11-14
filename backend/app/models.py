@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
-from sqlalchemy import String, Float, DateTime, Boolean, ForeignKey, Text, Integer
+from datetime import date, datetime, timezone
+from sqlalchemy import String, Float, DateTime, Boolean, ForeignKey, Text, Integer, Date as SQLDate, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 
@@ -26,7 +26,7 @@ class Astronaut(Base):
     call_sign: Mapped[str] = mapped_column(String)
     mission: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="Active")
-    flight_clearance: Mapped[str | None] = mapped_column(String, nullable=True, default="FLIGHT READY")
+    flight_clearance: Mapped[str | None] = mapped_column(String, nullable=True, default="UNREVIEWED")
     simulated: Mapped[bool] = mapped_column(Boolean, default=True)
 
 class Measurement(Base):
@@ -78,7 +78,8 @@ class MedicalRecord(Base):
     physician: Mapped[str] = mapped_column(String, default="Flight Surgeon")
     findings: Mapped[str] = mapped_column(Text)
     countermeasures: Mapped[str] = mapped_column(Text, default="")
-    status: Mapped[str] = mapped_column(String, default="Signed & Verified")
+    status: Mapped[str] = mapped_column(String, default="Pending clinician review")
+    simulated: Mapped[bool] = mapped_column(Boolean, default=False)
     date: Mapped[str] = mapped_column(String, default="")
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -92,6 +93,8 @@ class MedicalDocument(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
     confidence: Mapped[float] = mapped_column(Float, default=.55)
+    extraction_method: Mapped[str] = mapped_column(String, default="text")
+    simulated: Mapped[bool] = mapped_column(Boolean, default=False)
 
 class MedicalObservation(Base):
     __tablename__ = "medical_observations"
@@ -104,3 +107,31 @@ class MedicalObservation(Base):
     report_date: Mapped[str] = mapped_column(String, default="Unknown")
     confidence: Mapped[float] = mapped_column(Float, default=.35)
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    review_status: Mapped[str] = mapped_column(String, default="pending_review")
+    reviewed_by: Mapped[str] = mapped_column(String, default="")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_note: Mapped[str] = mapped_column(Text, default="")
+
+class CountermeasureCheck(Base):
+    __tablename__ = "countermeasure_checks"
+    __table_args__ = (UniqueConstraint("astronaut_id", "protocol_key", "session_date", name="uq_countermeasure_daily"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    astronaut_id: Mapped[int] = mapped_column(ForeignKey("astronauts.id"), index=True)
+    protocol_key: Mapped[str] = mapped_column(String, index=True)
+    session_date: Mapped[date] = mapped_column(SQLDate, index=True)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    session_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    session_note: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str] = mapped_column(String, default="Astronaut self-report")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    actor_username: Mapped[str] = mapped_column(String, index=True)
+    action: Mapped[str] = mapped_column(String, index=True)
+    entity_type: Mapped[str] = mapped_column(String, index=True)
+    entity_id: Mapped[str] = mapped_column(String)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)

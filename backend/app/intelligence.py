@@ -5,7 +5,7 @@ from collections import defaultdict
 
 def baseline(values):
     """Compute robust median and median absolute deviation (MAD) from historical values."""
-    clean = [float(v) for v in values if v is not None]
+    clean = [float(v) for v in values if v is not None and math.isfinite(float(v))]
     if len(clean) < 5:
         return {
             "available": False,
@@ -34,13 +34,19 @@ def detect(values):
         quality = getattr(row, "quality", "good")
         if quality and quality.lower() in ("poor", "invalid", "unverified"):
             continue
-        groups[(row.astronaut_id, row.metric)].append(row)
+        try:
+            value = float(row.value)
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(value):
+            continue
+        groups[(row.astronaut_id, row.metric, getattr(row, "unit", ""))].append(row)
 
-    for (aid, metric), rows in groups.items():
-        rows.sort(key=lambda x: x.timestamp)
+    for (aid, metric, unit), rows in groups.items():
+        rows.sort(key=lambda x: _time_key(getattr(x, "timestamp", None)))
         if len(rows) < 6:
             continue
-        history = rows[:-1]
+        history = rows[:-3] if len(rows) >= 9 else rows[:-1]
         current = rows[-1]
         b = baseline([x.value for x in history])
         if not b["available"]:
@@ -54,16 +60,19 @@ def detect(values):
         
         if z >= 2.5 or persistent:
             measurement_id = getattr(current, "id", None)
-            unit = getattr(current, "unit", "")
             out.append({
                 "astronaut_id": aid,
                 "measurement_id": measurement_id,
                 "metric": metric,
+                "unit": unit,
                 "priority": "high" if z >= 4 else "medium",
                 "reason": f"Latest {metric} is {current.value:g} {unit} versus personal historical median {med:g} {unit} (n={b['count']}); " + 
                           ("change has persisted across recent observations." if persistent else f"robust deviation is {z:.1f} scaled units."),
                 "value": current.value,
-                "baseline": med
+                "baseline": med,
+                "timestamp": _time_key(getattr(current, "timestamp", None)).isoformat(),
+                "source": getattr(current, "source", "unknown"),
+                "simulated": bool(getattr(current, "simulated", False)),
             })
     return out
 
@@ -72,283 +81,79 @@ def detect(values):
 # -------------------------------------------------------------
 
 def analyze_crew_health(measurements, assessments, astronaut=None):
-    """
-    Evaluates multi-system longitudinal health metrics across:
-    1. Cardiovascular Adaptation (Heart rate drift, HRV autonomic tone, BP)
-    2. Neurocognitive & Behavioural (Sleep architecture, cumulative fatigue, stress, mood)
-    3. Musculoskeletal & Physical Conditioning (Grip force, body mass)
-    4. Environmental & Life Support Exposure (Cabin CO2, radiation)
-
-    Returns:
-    - flight_readiness_score (0 - 100)
-    - status ('NOMINAL', 'ELEVATED RISK', 'CRITICAL')
-    - domain_assessments (detailed breakdown)
-    - abnormal_behaviours (flagged anomalies)
-    - recommendations (evidence-based countermeasures)
-    """
-    by_metric = defaultdict(list)
-    for m in measurements:
-        by_metric[getattr(m, "metric", "")].append(m)
-
-    # Sort each metric chronologically
-    for m_list in by_metric.values():
-        m_list.sort(key=lambda x: getattr(x, "timestamp", datetime.min))
-
-    # Sort assessments chronologically
-    sorted_assessments = sorted(
-        assessments,
-        key=lambda x: getattr(x, "timestamp", datetime.min)
-    )
-
-    readiness = 100.0
-    abnormal_behaviours = []
+    """Transparent prototype monitoring summary; never a clinical clearance."""
+    ordered = sorted(measurements, key=lambda x: _time_key(getattr(x, "timestamp", None)))
+    grouped = defaultdict(list)
+    for row in ordered:
+        if str(getattr(row, "quality", "good") or "good").lower() not in {"poor", "invalid", "unverified"}:
+            grouped[(str(row.metric), str(getattr(row, "unit", "")), str(getattr(row, "domain", "other")))].append(row)
     domain_assessments = {}
-    recommendations = []
+    abnormal = []
+    evidence = []
+    missing = []
+    for (metric, unit, domain), rows in grouped.items():
+        latest = rows[-1]
+        historical_rows = rows[:-3] if len(rows) >= 9 else rows[:-1]
+        historical = [r for r in historical_rows if not getattr(r, "simulated", False) or getattr(latest, "simulated", False)]
+        b = baseline([r.value for r in historical])
+        item = {"metric": metric, "value": latest.value, "unit": unit,
+                "timestamp": getattr(latest, "timestamp", None).isoformat() if getattr(latest, "timestamp", None) else None,
+                "source": getattr(latest, "source", "unknown"), "simulated": bool(getattr(latest, "simulated", False)),
+                "baseline": b["median"], "baseline_count": b["count"], "baseline_available": b["available"]}
+        evidence.append(item)
+        if not b["available"]:
+            missing.append(f"{metric}: fewer than 5 historical measurements")
+            continue
+        scale = max(1.4826 * b["mad"], abs(b["median"]) * .05, .01)
+        deviation = abs(float(latest.value) - b["median"]) / scale
+        item["deviation_scaled"] = round(deviation, 2)
+        if deviation >= 2.5:
+            abnormal.append({"category": domain, "severity": "REVIEW" if deviation < 4 else "PRIORITY REVIEW",
+                "title": f"{metric} differs from personal baseline", "metric": metric,
+                "detail": f"Latest {latest.value:g} {unit} vs historical median {b['median']:g} {unit} (n={b['count']}); illustrative robust deviation {deviation:.1f} scaled units.",
+                "current_value": latest.value, "baseline_value": b["median"], "measurement_id": getattr(latest, "id", None),
+                "timestamp": item["timestamp"], "source": item["source"], "simulated": item["simulated"]})
+        domain_assessments.setdefault(domain, {"title": domain.replace("_", " ").title(), "status": "Recorded observations", "findings": []})
+        domain_assessments[domain]["findings"].append(f"{metric}: {latest.value:g} {unit}" + (f"; baseline {b['median']:g} {unit}" if b["available"] else "; baseline unavailable"))
+    ordered_assessments = sorted(assessments, key=lambda x: _time_key(getattr(x, "timestamp", None)))
+    if ordered_assessments:
+        latest = ordered_assessments[-1]
+        prev = ordered_assessments[:-1]
+        sleep_base = baseline([x.sleep_hours for x in prev])
+        fatigue_base = baseline([x.fatigue for x in prev])
+        for metric, value, b, unit in (("Self-reported sleep", latest.sleep_hours, sleep_base, "hours"), ("Self-reported fatigue", latest.fatigue, fatigue_base, "/10")):
+            if b["available"]:
+                evidence.append({"metric": metric, "value": value, "unit": unit, "timestamp": _time_key(getattr(latest,"timestamp",None)).isoformat(), "source": getattr(latest,"source","Astronaut self-report"), "simulated": bool(getattr(latest,"simulated",False)), "baseline": b["median"], "baseline_count": b["count"], "baseline_available": True})
+                if abs(value-b["median"]) >= max(2.5*b["mad"], 1.0):
+                    abnormal.append({"category":"behavioural", "severity":"REVIEW", "title":f"{metric} differs from prior self-reports", "metric":metric, "detail":f"Latest {value:g} {unit} vs prior median {b['median']:g} {unit} (n={b['count']}); prototype comparison only.", "current_value":value,"baseline_value":b["median"],"timestamp":_time_key(getattr(latest,"timestamp",None)).isoformat(),"source":getattr(latest,"source","Astronaut self-report"),"simulated":bool(getattr(latest,"simulated",False))})
+            else: missing.append(f"{metric}: fewer than 5 prior self-reports")
+    expected = 8
+    coverage = min(100, round(100 * len(evidence) / expected))
+    for domain in ("cardiovascular", "musculoskeletal", "immune", "behavioural", "radiation_environment"):
+        domain_assessments.setdefault(domain, {"title": domain.replace("_", " ").title(), "status": "No available observations", "findings": ["No recent qualifying observation found."]})
+    return {"flight_readiness_score": coverage, "monitoring_coverage": coverage,
+        "score_label": "Prototype data coverage", "score_note": "Percent of eight expected sample data points present; not a clinical score or clearance.",
+        "overall_status": "REVIEW INDICATED" if abnormal else ("DATA LIMITED" if missing else "NO FLAGGED DEVIATIONS"),
+        "domain_assessments": domain_assessments, "abnormal_behaviours": abnormal,
+        "recommendations": [], "evidence": evidence, "missing_metrics": missing,
+        "calculation": {"available_observation_count":len(evidence), "expected_sample_count":expected, "illustrative_thresholds":True}}
 
-    # 1. Cardiovascular System Analysis
-    hr_list = by_metric.get("Resting heart rate", [])
-    hrv_list = by_metric.get("HRV", [])
-    bp_list = by_metric.get("Systolic BP", [])
+def _time_key(value):
+    if value is None: return datetime.min.replace(tzinfo=timezone.utc)
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
-    cardio_status = "NOMINAL"
-    cardio_findings = []
-
-    if hr_list and len(hr_list) >= 5:
-        base_hr = baseline([x.value for x in hr_list[:30]])
-        latest_hr = hr_list[-1].value
-        med_hr = base_hr["median"] or 65.0
-        hr_drift = latest_hr - med_hr
-
-        if hr_drift >= 12.0:
-            cardio_status = "ELEVATED RISK"
-            readiness -= 18.0
-            abnormal_behaviours.append({
-                "category": "Cardiovascular",
-                "severity": "HIGH" if hr_drift >= 18.0 else "MEDIUM",
-                "title": "Persistent Tachycardic Baseline Drift",
-                "detail": f"Resting heart rate drifted to {latest_hr:.1f} bpm (+{hr_drift:.1f} bpm above personal baseline {med_hr:.1f} bpm). Indicates autonomic stress or cardiovascular deconditioning.",
-                "metric": "Resting heart rate",
-                "current_value": latest_hr,
-                "baseline_value": med_hr
-            })
-            cardio_findings.append(f"Elevated resting HR of {latest_hr:.1f} bpm (+{hr_drift:.1f} bpm drift)")
-            recommendations.append("Increase lower-body negative pressure (LBNP) or ergometer resistance loading by 15% to stimulate venous return.")
-        elif hr_drift >= 6.0:
-            readiness -= 8.0
-            cardio_findings.append(f"Mild elevation in resting HR (+{hr_drift:.1f} bpm)")
-
-    if hrv_list and len(hrv_list) >= 5:
-        base_hrv = baseline([x.value for x in hrv_list[:30]])
-        latest_hrv = hrv_list[-1].value
-        med_hrv = base_hrv["median"] or 62.0
-        hrv_drop = med_hrv - latest_hrv
-
-        if hrv_drop >= 15.0:
-            cardio_status = "ELEVATED RISK"
-            readiness -= 12.0
-            abnormal_behaviours.append({
-                "category": "Autonomic Nervous System",
-                "severity": "MEDIUM",
-                "title": "Reduced Heart Rate Variability (Vagal Withdrawal)",
-                "detail": f"HRV decreased to {latest_hrv:.1f} ms (-{hrv_drop:.1f} ms below baseline {med_hrv:.1f} ms), signaling systemic physiological strain.",
-                "metric": "HRV",
-                "current_value": latest_hrv,
-                "baseline_value": med_hrv
-            })
-            cardio_findings.append(f"HRV suppressed to {latest_hrv:.1f} ms (vagal withdrawal)")
-            recommendations.append("Prescribe active recovery interval session and 20 min guided diaphragmatic breathing.")
-
-    domain_assessments["cardiovascular"] = {
-        "title": "Cardiovascular & Hemodynamics",
-        "status": cardio_status,
-        "score": max(50, int(100 - (100 - readiness) * 0.4)),
-        "findings": cardio_findings or ["Hemodynamic parameters within nominal calibrated limits."]
-    }
-
-    # 2. Neurocognitive & Behavioural Health Analysis
-    behav_status = "NOMINAL"
-    behav_findings = []
-
-    if sorted_assessments:
-        recent_ass = sorted_assessments[-5:]
-        latest_ass = sorted_assessments[-1]
-
-        avg_sleep = statistics.mean([getattr(a, "sleep_hours", 7.5) for a in recent_ass])
-        latest_sleep = getattr(latest_ass, "sleep_hours", 7.5)
-        latest_fatigue = getattr(latest_ass, "fatigue", 2)
-        latest_stress = getattr(latest_ass, "stress", 3)
-        latest_mood = getattr(latest_ass, "mood", 7)
-        symptoms = getattr(latest_ass, "symptoms", "None reported")
-
-        # Check sleep deprivation
-        if latest_sleep < 5.5 or avg_sleep < 6.0:
-            behav_status = "ELEVATED RISK"
-            readiness -= 15.0
-            abnormal_behaviours.append({
-                "category": "Behavioural & Sleep",
-                "severity": "HIGH" if latest_sleep < 4.5 else "MEDIUM",
-                "title": "Acute Sleep Deprivation & Circadian Deficit",
-                "detail": f"Reported {latest_sleep:.1f} hours sleep (rolling 5-day average: {avg_sleep:.1f} hrs). Chronic sleep debt degrades cognitive alertness and motor reaction time.",
-                "metric": "Sleep duration",
-                "current_value": latest_sleep,
-                "baseline_value": 7.5
-            })
-            behav_findings.append(f"Sleep duration restricted to {latest_sleep:.1f}h (deficit vs 7.5h nominal)")
-            recommendations.append("Enforce 45-minute cabin LED circadian phase-shift and prescribe 0.5 mg oral melatonin 30 minutes pre-sleep.")
-
-        # Check fatigue & stress interaction
-        if latest_fatigue >= 7 or (latest_fatigue >= 6 and latest_stress >= 6):
-            if behav_status == "NOMINAL":
-                behav_status = "ELEVATED RISK"
-            readiness -= 14.0
-            abnormal_behaviours.append({
-                "category": "Cognitive Performance",
-                "severity": "MEDIUM",
-                "title": "Elevated Subjective Fatigue & Cognitive Stress",
-                "detail": f"Fatigue index rated {latest_fatigue}/10 and stress at {latest_stress}/10. High operational workload or environmental stressors require workload throttling.",
-                "metric": "Fatigue",
-                "current_value": latest_fatigue,
-                "baseline_value": 2
-            })
-            behav_findings.append(f"Fatigue index elevated at {latest_fatigue}/10; stress at {latest_stress}/10")
-            recommendations.append("Reduce high-complexity payload schedule; grant 2-hour sleep buffer / rest cycle.")
-
-        # Symptom surveillance
-        if symptoms and symptoms.lower() not in ("none", "none reported", "nominal pre-flight readiness", "nominal"):
-            readiness -= 8.0
-            abnormal_behaviours.append({
-                "category": "Symptom Surveillance",
-                "severity": "MEDIUM",
-                "title": f"Reported Somatic Symptoms: {symptoms}",
-                "detail": f"Astronaut logged: '{symptoms}'. Requires clinical monitoring for vestibular space adaptation syndrome or environmental co-factors.",
-                "metric": "Symptoms",
-                "current_value": symptoms,
-                "baseline_value": "None"
-            })
-            behav_findings.append(f"Active clinical symptom: {symptoms}")
-
-    domain_assessments["behavioural"] = {
-        "title": "Neurocognitive & Behavioural State",
-        "status": behav_status,
-        "score": max(50, int(100 - (100 - readiness) * 0.35)),
-        "findings": behav_findings or ["Sleep architecture and cognitive indices remain nominal."]
-    }
-
-    # 3. Musculoskeletal Conditioning
-    musc_status = "NOMINAL"
-    musc_findings = []
-    grip_list = by_metric.get("Grip", [])
-
-    if grip_list and len(grip_list) >= 5:
-        base_grip = baseline([x.value for x in grip_list[:30]])
-        latest_grip = grip_list[-1].value
-        med_grip = base_grip["median"] or 45.0
-        grip_drop = med_grip - latest_grip
-
-        if grip_drop >= 4.0:
-            musc_status = "ELEVATED RISK"
-            readiness -= 10.0
-            abnormal_behaviours.append({
-                "category": "Musculoskeletal",
-                "severity": "MEDIUM",
-                "title": "Isometric Grip Strength Decline",
-                "detail": f"Grip strength measured {latest_grip:.1f} kg (-{grip_drop:.1f} kg loss from baseline {med_grip:.1f} kg). Suggests microgravity neuromuscular deconditioning.",
-                "metric": "Grip",
-                "current_value": latest_grip,
-                "baseline_value": med_grip
-            })
-            musc_findings.append(f"Grip strength declined to {latest_grip:.1f} kg (-{grip_drop:.1f} kg)")
-            recommendations.append("Prescribe targeted forearm isometric contractions and increase ARED deadlift volume.")
-        else:
-            musc_findings.append(f"Grip force stable at {latest_grip:.1f} kg.")
-
-    domain_assessments["musculoskeletal"] = {
-        "title": "Musculoskeletal & Physical Conditioning",
-        "status": musc_status,
-        "score": 90 if musc_status == "NOMINAL" else 75,
-        "findings": musc_findings or ["Muscle performance and isometric grip strength stable."]
-    }
-
-    # 4. Environmental & Life Support Exposure
-    env_status = "NOMINAL"
-    env_findings = []
-    co2_list = by_metric.get("Cabin CO2", [])
-
-    if co2_list:
-        latest_co2 = co2_list[-1].value
-        if latest_co2 >= 3.5:
-            env_status = "ELEVATED RISK"
-            readiness -= 8.0
-            abnormal_behaviours.append({
-                "category": "Environmental",
-                "severity": "MEDIUM",
-                "title": "Elevated Cabin CO2 Partial Pressure",
-                "detail": f"Ambient CO2 reached {latest_co2:.2f} mmHg. Spaceflight hypercapnia can exacerbate morning cephalic headache and cognitive lethargy.",
-                "metric": "Cabin CO2",
-                "current_value": latest_co2,
-                "baseline_value": 2.4
-            })
-            env_findings.append(f"Cabin CO2 elevated at {latest_co2:.2f} mmHg")
-            recommendations.append("Activate ECLSS secondary CDRA (Carbon Dioxide Removal Assembly) bed.")
-        else:
-            env_findings.append(f"Atmospheric CO2 nominal at {latest_co2:.2f} mmHg.")
-
-    domain_assessments["environmental"] = {
-        "title": "Environmental & Life Support Safety",
-        "status": env_status,
-        "score": 95 if env_status == "NOMINAL" else 80,
-        "findings": env_findings or ["ECLSS atmospheric parameters and radiation levels within safe limits."]
-    }
-
-    final_score = max(35, min(100, int(round(readiness))))
-    overall_status = "NOMINAL"
-    if final_score < 65 or any(b["severity"] == "HIGH" for b in abnormal_behaviours):
-        overall_status = "CRITICAL"
-    elif final_score < 85 or len(abnormal_behaviours) >= 1:
-        overall_status = "ELEVATED RISK"
-
-    return {
-        "flight_readiness_score": final_score,
-        "overall_status": overall_status,
-        "domain_assessments": domain_assessments,
-        "abnormal_behaviours": abnormal_behaviours,
-        "recommendations": recommendations or ["Continue current diet, hydration, and 2.5-hour daily countermeasure exercise protocol."]
-    }
-
-def generate_daily_health_report(astronaut, measurements, assessments, mission_day=60):
-    """
-    Generates a NASA Flight Surgeon Daily Clinical Health Report
-    synthesizing all multi-domain observations, anomaly warnings, and countermeasure plans.
-    """
+def generate_daily_health_report(astronaut, measurements, assessments, mission_day=42):
+    """Build a prototype summary of available records; never medical sign-off."""
     analysis = analyze_crew_health(measurements, assessments, astronaut=astronaut)
     now_utc = datetime.now(timezone.utc)
     astro_name = getattr(astronaut, "name", "Astronaut") if astronaut else "Astronaut"
     call_sign = getattr(astronaut, "call_sign", "CREW-1") if astronaut else "CREW-1"
     aid = getattr(astronaut, "id", 1) if astronaut else 1
 
-    # Format clinical summary
     status_label = analysis["overall_status"]
-    score = analysis["flight_readiness_score"]
-
-    if status_label == "CRITICAL":
-        summary = (
-            f"Daily clinical review for {astro_name} ({call_sign}) on Mission Day {mission_day:03d} "
-            f"indicates acute deconditioning with a Flight Readiness Score of {score}%. "
-            f"Significant physiological drift detected across {len(analysis['abnormal_behaviours'])} system markers. "
-            f"Immediate flight surgeon countermeasure adjustments required."
-        )
-    elif status_label == "ELEVATED RISK":
-        summary = (
-            f"Daily clinical review for {astro_name} ({call_sign}) on Mission Day {mission_day:03d} "
-            f"identifies moderate physiological adaptation stress (Readiness Score: {score}%). "
-            f"Cardiovascular or circadian drift noted; adaptive countermeasures recommended to prevent functional degradation."
-        )
-    else:
-        summary = (
-            f"Daily clinical review for {astro_name} ({call_sign}) on Mission Day {mission_day:03d} "
-            f"demonstrates excellent physiological adaptation (Readiness Score: {score}%). "
-            f"All major hemodynamic, sleep, and physical conditioning markers remain within calibrated baselines."
-        )
+    summary = (f"Prototype monitoring summary for {astro_name} ({call_sign}), Mission Day {mission_day:03d}: "
+               f"{len(analysis['evidence'])} recorded data points reviewed; {len(analysis['abnormal_behaviours'])} illustrative baseline deviations flagged. "
+               "This summary is not clinically validated and does not determine flight clearance.")
 
     return {
         "report_id": f"CSR-2026-D{mission_day:03d}-A{aid}",
@@ -358,37 +163,33 @@ def generate_daily_health_report(astronaut, measurements, assessments, mission_d
         "astronaut_id": aid,
         "astronaut_name": astro_name,
         "call_sign": call_sign,
-        "mission": getattr(astronaut, "mission", "Asteria-7") if astronaut else "Asteria-7",
-        "flight_readiness_score": score,
+        "mission": getattr(astronaut, "mission", "Mars Transit") if astronaut else "Mars Transit",
+        "flight_readiness_score": analysis["monitoring_coverage"],
+        "monitoring_coverage": analysis["monitoring_coverage"],
+        "score_label": analysis["score_label"],
+        "score_note": analysis["score_note"],
+        "evidence": analysis["evidence"],
+        "missing_metrics": analysis["missing_metrics"],
+        "calculation": analysis["calculation"],
         "overall_status": status_label,
         "executive_summary": summary,
         "domain_assessments": analysis["domain_assessments"],
         "abnormal_behaviours": analysis["abnormal_behaviours"],
-        "countermeasures": analysis["recommendations"],
-        "physician": "Dr. Robert Vance",
-        "physician_title": "Chief Flight Surgeon / Medical Officer",
-        "verified": True
+        "countermeasures": [],
+        "physician": None,
+        "physician_title": None,
+        "verified": False,
+        "simulated": bool(getattr(astronaut, "simulated", False)),
+        "status": "Generated data summary · pending clinician review"
     }
 
-def generate_hourly_telemetry(aid: int, metric: str = "Resting heart rate", day: int = 60):
-    """
-    Generates realistic 24-hour circadian telemetry readings (00:00 to 23:00 / H00 to H23)
-    for the current mission day.
-    
-    Cardiovascular circadian pattern in spaceflight:
-    - 00:00 - 06:00: Sleep / nadir period (lower HR, high vagal tone)
-    - 07:00 - 09:00: Waking / cortisol awakening surge
-    - 10:00 - 14:00: Operational workload / EVA / Exercise protocol
-    - 15:00 - 19:00: Afternoon maintenance / payload operations
-    - 20:00 - 23:00: Evening wind-down / pre-sleep
-    """
+def generate_hourly_telemetry(aid: int, metric: str = "Resting heart rate", day: int = 42):
+    """Return a clearly labeled illustrative profile for the demo chart only."""
     now_utc = datetime.now(timezone.utc)
     current_hour = now_utc.hour
 
     # Baseline profiles
-    # Maya Chen (aid=1) at Day 60: elevated daytime HR (~84 bpm) due to sleep debt & deconditioning
-    # Elena Rossi (aid=2): nominal (~66 bpm)
-    # David Okafor (aid=3): nominal (~68 bpm)
+    # These values are illustrative chart points; they are not readouts or alerts.
     if aid == 1:
         day_baseline = 84.0
         night_nadir = 68.0
@@ -430,8 +231,6 @@ def generate_hourly_telemetry(aid: int, metric: str = "Resting heart rate", day:
         val = round(expected_val + jitter, 1)
 
         is_drift = False
-        if metric in ("Resting heart rate", "Heart Rate"):
-            is_drift = val > 75.0 if aid == 1 else val > 80.0
 
         is_current = (h == current_hour)
         label = f"{h:02d}:00"
@@ -454,6 +253,8 @@ def generate_hourly_telemetry(aid: int, metric: str = "Resting heart rate", day:
         "metric": metric,
         "unit": unit,
         "mission_day": day,
+        "simulated": True,
+        "source": "Illustrative generated profile; not stored telemetry",
         "current_hour": current_hour,
         "current_value": points[current_hour]["value"],
         "hourly_points": points

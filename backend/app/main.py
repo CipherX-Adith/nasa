@@ -13,7 +13,7 @@ try:
 except ImportError:
     pass
 from .db import Base, engine, get_db
-from .models import User, Astronaut, Measurement, Alert, Assessment, MedicalRecord, MedicalDocument, MedicalObservation
+from .models import User, Astronaut, Measurement, Alert, Assessment, MedicalRecord, MedicalDocument, MedicalObservation, CountermeasureCheck, AuditEvent
 from .core import verify_password, hash_password, make_token, read_token
 from .intelligence import (
     baseline,
@@ -27,50 +27,68 @@ from .seed import seed
 app = FastAPI(title="ORBITCARE", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://localhost:8000",
+    allow_origins=[origin.strip() for origin in os.getenv("FRONTEND_ORIGINS", "").split(",") if origin.strip()] + [
+        "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://localhost:8000"
     ],
-    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 def ensure_schema():
+    if engine.dialect.name != "sqlite":
+        return
     with engine.connect() as conn:
         try:
-            res = conn.execute(text("PRAGMA table_info(users)")).fetchall()
-            cols = {r[1] for r in res}
-            if "status" not in cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN status VARCHAR DEFAULT 'approved'"))
-            if "full_name" not in cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN full_name VARCHAR DEFAULT ''"))
-            if "call_sign" not in cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN call_sign VARCHAR DEFAULT ''"))
-            if "mission" not in cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN mission VARCHAR DEFAULT 'Asteria-7'"))
-            if "specialization" not in cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN specialization VARCHAR DEFAULT 'Mission Specialist'"))
-            if "created_at" not in cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN created_at DATETIME"))
-            res_a = conn.execute(text("PRAGMA table_info(astronauts)")).fetchall()
-            cols_a = {r[1] for r in res_a}
-            if "flight_clearance" not in cols_a:
-                conn.execute(text("ALTER TABLE astronauts ADD COLUMN flight_clearance VARCHAR DEFAULT 'FLIGHT READY'"))
+            migrations = {
+                "users": {
+                    "status": "VARCHAR DEFAULT 'approved'", "full_name": "VARCHAR DEFAULT ''",
+                    "call_sign": "VARCHAR DEFAULT ''", "mission": "VARCHAR DEFAULT 'Asteria-7'",
+                    "specialization": "VARCHAR DEFAULT 'Mission Specialist'", "created_at": "DATETIME",
+                },
+                "astronauts": {"flight_clearance": "VARCHAR DEFAULT 'UNREVIEWED'"},
+                "medical_documents": {
+                    "extraction_method": "VARCHAR DEFAULT 'text'", "simulated": "BOOLEAN DEFAULT 0",
+                },
+                "medical_records": {"simulated": "BOOLEAN DEFAULT 0"},
+                "medical_observations": {
+                    "review_status": "VARCHAR DEFAULT 'pending_review'", "reviewed_by": "VARCHAR DEFAULT ''",
+                    "reviewed_at": "DATETIME", "review_note": "TEXT DEFAULT ''",
+                },
+            }
+            for table, columns in migrations.items():
+                existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()}
+                if not existing:
+                    continue
+                for column, declaration in columns.items():
+                    if column not in existing:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}"))
             conn.commit()
-        except Exception as e:
-            print("Schema migration note:", e)
+        except Exception:
+            conn.rollback()
+            raise
 
-ensure_schema()
 Base.metadata.create_all(bind=engine)
+ensure_schema()
 
-FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "https://orbitcare-afcc9-default-rtdb.asia-southeast1.firebasedatabase.app")
+def audit(db: Session, user, action: str, entity_type: str, entity_id: str):
+    """Store a minimal audit trail without copying medical payloads into logs."""
+    db.add(AuditEvent(
+        actor_id=getattr(user, "id", None),
+        actor_username=getattr(user, "username", "system"),
+        action=action,
+        entity_type=entity_type,
+        entity_id=str(entity_id),
+    ))
+
+FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "").strip()
+FIREBASE_DATABASE_SECRET = os.getenv("FIREBASE_DATABASE_SECRET", "").strip()
 
 def fb_request(path: str, data: dict | list | None = None, method: str = "GET"):
-    url = f"{FIREBASE_DATABASE_URL.rstrip('/')}/{path.lstrip('/')}.json"
+    if not FIREBASE_DATABASE_URL or not FIREBASE_DATABASE_SECRET:
+        return None
+    from urllib.parse import quote
+    url = f"{FIREBASE_DATABASE_URL.rstrip('/')}/{path.lstrip('/')}.json?auth={quote(FIREBASE_DATABASE_SECRET, safe='')}"
     req_data = json.dumps(data).encode("utf-8") if data is not None else None
     headers = {"Content-Type": "application/json"} if data is not None else {}
     req = urllib.request.Request(url, data=req_data, headers=headers, method=method)
@@ -78,8 +96,7 @@ def fb_request(path: str, data: dict | list | None = None, method: str = "GET"):
         with urllib.request.urlopen(req, timeout=4.0) as resp:
             content = resp.read().decode("utf-8")
             return json.loads(content) if content else None
-    except Exception as e:
-        print(f"Firebase {method} {path} note:", e)
+    except Exception:
         return None
 
 def sync_from_firebase(db: Session):
@@ -104,7 +121,9 @@ def sync_from_firebase(db: Session):
             db.commit()
 
         # 2. Users from Firebase
-        users_data = fb_request("users")
+        # User identities and credentials stay local. Importing remote role/password
+        # fields would allow privilege escalation through a shared Firebase database.
+        users_data = None
         if users_data:
             items = users_data.values() if isinstance(users_data, dict) else users_data
             for u in items:
@@ -116,7 +135,9 @@ def sync_from_firebase(db: Session):
                 if not db.query(User).filter_by(username=uname).first():
                     db.add(User(
                         username=uname,
-                        password_hash=u.get("password_hash") or hash_password(u.get("password", "orbitcare-demo")),
+                        # Firebase is not an authentication authority. Never import remotely
+                        # supplied password material or a shared fallback credential.
+                        password_hash=hash_password(os.urandom(32).hex()),
                         role=u.get("role", "astronaut"),
                         status=u.get("status", "approved"),
                         full_name=u.get("full_name") or u.get("name") or uname.title(),
@@ -212,8 +233,9 @@ def sync_from_firebase(db: Session):
                             physician=r.get("physician", "Flight Surgeon"),
                             findings=r.get("findings", ""),
                             countermeasures=r.get("countermeasures", ""),
-                            status=r.get("status", "Signed & Verified"),
+                            status=r.get("status", "Pending clinician review"),
                             date=r.get("date", ""),
+                            simulated=bool(r.get("simulated", False)),
                             timestamp=ts,
                         ))
             db.commit()
@@ -238,16 +260,17 @@ def sync_from_firebase(db: Session):
                         priority=alt.get("priority", "medium"),
                         reason=alt.get("reason", ""),
                         acknowledged=alt.get("acknowledged", False),
-                        follow_up=alt.get("follow_up"),
+                        follow_up=alt.get("follow_up") or "",
                         created_at=ts,
                     ))
             db.commit()
-    except Exception as e:
-        print("Firebase sync error:", e)
+    except Exception:
+        # Keep credentials, record payloads, and response bodies out of logs.
+        return
 
 with next(get_db()) as db:
     sync_from_firebase(db)
-    if db.query(Astronaut).count() == 0:
+    if db.query(Astronaut).count() == 0 and not (os.getenv("VERCEL") or os.getenv("APP_ENV", "").lower() == "production"):
         seed(db)
 
 def current_user(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
@@ -255,7 +278,7 @@ def current_user(authorization: str | None = Header(default=None), db: Session =
         raise HTTPException(401, "Sign in required")
     payload = read_token(authorization[7:])
     user = db.query(User).filter_by(username=(payload or {}).get("sub")).first() if payload else None
-    if not user:
+    if not user or getattr(user, "status", "approved") != "approved":
         raise HTTPException(401, "Invalid session")
     return user
 
@@ -291,104 +314,32 @@ def refresh_alerts(db: Session):
             reason=item["reason"]
         )
         db.add(alert)
+        db.flush()
+        audit(db, None, "alert_generated", "alert", alert.id)
         if meas_id is not None:
             existing_meas_ids.add(meas_id)
         active_unacked.add(pair)
     db.commit()
 
-def seed_new_astronaut_baseline(db: Session, aid: int):
-    now = datetime.now(timezone.utc)
-    metrics = [
-        ("cardiovascular", "Resting heart rate", "bpm", 68.0),
-        ("cardiovascular", "HRV", "ms", 62.0),
-        ("cardiovascular", "Systolic BP", "mmHg", 116.0),
-        ("immune", "Core Temp", "°C", 36.6),
-        ("musculoskeletal", "Grip", "kg", 46.0),
-        ("musculoskeletal", "Body mass", "kg", 72.0),
-        ("behavioural", "Sleep duration", "hours", 7.6),
-        ("behavioural", "Fatigue", "/10", 2.2),
-        ("behavioural", "Sleep quality", "/10", 7.8),
-        ("behavioural", "Stress", "/10", 2.5),
-        ("behavioural", "Mood", "/10", 8.0),
-        ("radiation_environment", "Cabin CO2", "mmHg", 2.4),
-        ("radiation_environment", "Radiation dose rate", "mSv/day", 0.41),
-    ]
-    fb_meas = []
-    for domain, metric, unit, base in metrics:
-        for day_idx in range(1, 31):
-            ts = now - timedelta(days=(30 - day_idx))
-            val = round(base + random.uniform(-1.5, 1.5), 2)
-            m = Measurement(
-                astronaut_id=aid,
-                domain=domain,
-                metric=metric,
-                value=val,
-                unit=unit,
-                timestamp=ts,
-                source="Initial flight baseline",
-                simulated=False
-            )
-            db.add(m)
-            fb_meas.append({
-                "astronaut_id": aid,
-                "domain": domain,
-                "metric": metric,
-                "value": val,
-                "unit": unit,
-                "timestamp": ts.isoformat(),
-                "source": "Initial flight baseline",
-                "simulated": False
-            })
-    fb_ass = []
-    for day_idx in range(1, 31):
-        ts = now - timedelta(days=(30 - day_idx))
-        db.add(Assessment(
-            astronaut_id=aid,
-            sleep_hours=7.5,
-            sleep_quality=8,
-            stress=2,
-            mood=8,
-            fatigue=2,
-            symptoms="Nominal pre-flight readiness",
-            timestamp=ts,
-            source="Pre-flight baseline assessment",
-            simulated=False
-        ))
-        fb_ass.append({
-            "astronaut_id": aid,
-            "sleep_hours": 7.5,
-            "sleep_quality": 8,
-            "stress": 2,
-            "mood": 8,
-            "fatigue": 2,
-            "symptoms": "Nominal pre-flight readiness",
-            "timestamp": ts.isoformat(),
-            "source": "Pre-flight baseline assessment",
-            "simulated": False
-        })
-    db.commit()
-    fb_request(f"measurements/{aid}", fb_meas, method="PUT")
-    fb_request(f"assessments/{aid}", fb_ass, method="PUT")
-
 class Login(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=256)
 
 class RegisterIn(BaseModel):
-    username: str
-    password: str
-    full_name: str
-    call_sign: str = ""
-    mission: str = "Asteria-7"
-    specialization: str = "Mission Specialist"
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=8, max_length=128)
+    full_name: str = Field(min_length=1, max_length=120)
+    call_sign: str = Field(default="", max_length=40)
+    mission: str = Field(default="Mars Transit", max_length=120)
+    specialization: str = Field(default="Mission Specialist", max_length=120)
 
 class DirectAstronautIn(BaseModel):
-    name: str
-    username: str
-    password: str = "orbitcare-demo"
-    call_sign: str = ""
-    mission: str = "Asteria-7"
-    specialization: str = "Mission Specialist"
+    name: str = Field(min_length=1, max_length=120)
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=8, max_length=128)
+    call_sign: str = Field(default="", max_length=40)
+    mission: str = Field(default="Mars Transit", max_length=120)
+    specialization: str = Field(default="Mission Specialist", max_length=120)
 
 class AssessmentIn(BaseModel):
     sleep_hours: float = Field(ge=0, le=24)
@@ -396,16 +347,16 @@ class AssessmentIn(BaseModel):
     stress: int = Field(ge=1, le=10)
     mood: int = Field(ge=1, le=10)
     fatigue: int = Field(ge=1, le=10)
-    symptoms: str = "None reported"
+    symptoms: str = Field(default="None reported", max_length=2000)
 
 class MedicalRecordIn(BaseModel):
-    record_type: str = "Clinical Evaluation"
-    title: str
-    physician: str = "Flight Surgeon"
-    findings: str
-    countermeasures: str = ""
-    status: str = "Signed & Verified"
-    date: str = ""
+    record_type: str = Field(default="Clinical Evaluation", max_length=80)
+    title: str = Field(min_length=1, max_length=200)
+    physician: str = Field(default="Flight Surgeon", max_length=120)
+    findings: str = Field(min_length=1, max_length=10000)
+    countermeasures: str = Field(default="", max_length=5000)
+    status: str = Field(default="Pending clinician review", max_length=80)
+    date: str = Field(default="", max_length=30)
 
 class Followup(BaseModel):
     note: str = Field(min_length=1, max_length=2000)
@@ -415,21 +366,39 @@ class Ask(BaseModel):
     astronaut_id: int | None = None
 
 class MeasurementIn(BaseModel):
-    domain: str
-    metric: str
-    value: float
-    unit: str
+    domain: str = Field(min_length=1, max_length=80)
+    metric: str = Field(min_length=1, max_length=120)
+    value: float = Field(allow_inf_nan=False)
+    unit: str = Field(min_length=1, max_length=40)
     timestamp: datetime | None = None
-    source: str = "Manual entry"
-    quality: str = "good"
+    source: str = Field(default="Manual entry", max_length=120)
+    quality: str = Field(default="good", pattern="^(good|fair|poor|invalid|unverified)$")
+
+class ObservationReview(BaseModel):
+    test_name: str | None = Field(default=None, min_length=1, max_length=120)
+    result: str | None = Field(default=None, min_length=1, max_length=120)
+    unit: str | None = Field(default=None, max_length=40)
+    reference_range: str | None = Field(default=None, max_length=120)
+    report_date: str | None = Field(default=None, max_length=40)
+    review_note: str = Field(default="", max_length=1000)
+
+class AstronautCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    call_sign: str = Field(min_length=1, max_length=40)
+    mission: str = Field(default="Mars Transit", max_length=120)
 
 class ClearanceIn(BaseModel):
     clearance: str
     notes: str = ""
 
 class ConsultIn(BaseModel):
-    note: str
-    urgency: str = "medium"
+    note: str = Field(min_length=1, max_length=2000)
+    urgency: str = Field(default="medium", pattern="^(low|medium|high)$")
+
+class CountermeasureUpdate(BaseModel):
+    completed: bool
+    session_minutes: int | None = Field(default=None, ge=0, le=600)
+    session_note: str = Field(default="", max_length=500)
 
 @app.get("/")
 @app.get("/api")
@@ -471,7 +440,6 @@ def register(data: RegisterIn, db: Session = Depends(get_db)):
     fb_request(f"users/{uname}", {
         "id": user.id,
         "username": user.username,
-        "password_hash": user.password_hash,
         "role": user.role,
         "status": user.status,
         "full_name": user.full_name,
@@ -562,8 +530,6 @@ def approve_user(user_id: int, db: Session = Depends(get_db), admin = Depends(me
         db.flush()
         
         target_user.astronaut_id = astro.id
-        # Seed baseline vitals and health assessments for the newly approved astronaut
-        seed_new_astronaut_baseline(db, astro.id)
     
     db.commit()
     db.refresh(target_user)
@@ -572,7 +538,6 @@ def approve_user(user_id: int, db: Session = Depends(get_db), admin = Depends(me
     fb_request(f"users/{target_user.username}", {
         "id": target_user.id,
         "username": target_user.username,
-        "password_hash": target_user.password_hash,
         "role": target_user.role,
         "status": target_user.status,
         "full_name": target_user.full_name,
@@ -641,14 +606,12 @@ def direct_create_astronaut(data: DirectAstronautIn, db: Session = Depends(get_d
     db.add(user)
     db.flush()
     
-    seed_new_astronaut_baseline(db, astro.id)
     db.commit()
 
     fb_request(f"astronauts/{astro.id}", serialize(astro), method="PUT")
     fb_request(f"users/{user.username}", {
         "id": user.id,
         "username": user.username,
-        "password_hash": user.password_hash,
         "role": user.role,
         "status": user.status,
         "full_name": user.full_name,
@@ -660,7 +623,7 @@ def direct_create_astronaut(data: DirectAstronautIn, db: Session = Depends(get_d
     }, method="PUT")
     
     return {
-        "message": f"Astronaut '{data.name}' created and cleared for flight.",
+        "message": f"Astronaut '{data.name}' created in the roster; clearance remains unreviewed.",
         "astronaut": serialize(astro),
         "username": uname
     }
@@ -675,12 +638,11 @@ def astronauts(db: Session = Depends(get_db), user = Depends(current_user)):
     return [serialize(astro)] if astro else []
 
 @app.post("/api/astronauts")
-def create_astronaut(data: dict, db: Session = Depends(get_db), user = Depends(medical)):
-    a = Astronaut(name=data["name"], call_sign=data["call_sign"], mission=data.get("mission", "Asteria-7"))
+def create_astronaut(data: AstronautCreate, db: Session = Depends(get_db), user = Depends(medical)):
+    a = Astronaut(name=data.name.strip(), call_sign=data.call_sign.strip(), mission=data.mission.strip())
     db.add(a)
     db.commit()
     db.refresh(a)
-    seed_new_astronaut_baseline(db, a.id)
     return serialize(a)
 
 @app.get("/api/astronauts/{aid}/measurements")
@@ -693,7 +655,8 @@ def measurements(aid: int, metric: str | None = None, db: Session = Depends(get_
 
 @app.post("/api/astronauts/{aid}/measurements")
 def add_measurement(aid: int, data: MeasurementIn, db: Session = Depends(get_db), user = Depends(current_user)):
-    allowed(user, aid)
+    if user.role != "astronaut" or user.astronaut_id != aid:
+        raise HTTPException(403, "Only the astronaut can submit their own manual measurement")
     if not db.get(Astronaut, aid):
         raise HTTPException(404, "Astronaut not found")
     x = Measurement(
@@ -727,24 +690,10 @@ def live_telemetry_tick(aid: int, db: Session = Depends(get_db), user = Depends(
     if not a:
         raise HTTPException(404, "Astronaut not found")
     
-    # Base target HR: Maya Chen at Day 60 is elevated (~84.0 bpm), others nominal (~68.0 bpm)
-    target_base = 84.0 if aid == 1 else 68.0
-    jitter = round(random.uniform(-1.2, 1.2), 1)
-    new_hr = round(target_base + jitter, 1)
-
-    payload = {
-        "id": int(datetime.now(timezone.utc).timestamp() * 1000),
-        "astronaut_id": aid,
-        "domain": "cardiovascular",
-        "metric": "Resting heart rate",
-        "value": new_hr,
-        "unit": "bpm",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "source": "Live telemetry downlink",
-        "quality": "good",
-        "simulated": False
-    }
-    return payload
+    latest = db.query(Measurement).filter_by(astronaut_id=aid, metric="Resting heart rate").order_by(desc(Measurement.timestamp)).first()
+    if not latest:
+        raise HTTPException(404, "No resting heart-rate measurement is available")
+    return serialize(latest)
 
 @app.get("/api/astronauts/{aid}/baselines")
 def baselines(aid: int, db: Session = Depends(get_db), user = Depends(current_user)):
@@ -753,10 +702,15 @@ def baselines(aid: int, db: Session = Depends(get_db), user = Depends(current_us
     groups = {}
     for r in rows:
         groups.setdefault((r.metric, r.unit, r.domain), []).append(r)
-    return [{"metric": m, "unit": u, "domain": d, **baseline([x.value for x in rs])} for (m, u, d), rs in groups.items()]
+    result = []
+    for (metric, unit, domain), group in groups.items():
+        group.sort(key=lambda x: x.timestamp)
+        history = group[:-3] if len(group) >= 9 else group
+        result.append({"metric": metric, "unit": unit, "domain": domain, **baseline([x.value for x in history])})
+    return result
 
 @app.get("/api/astronauts/{aid}/telemetry/hourly")
-def hourly_telemetry(aid: int, metric: str = "Resting heart rate", day: int = 60, db: Session = Depends(get_db), user = Depends(current_user)):
+def hourly_telemetry(aid: int, metric: str = "Resting heart rate", day: int = 42, db: Session = Depends(get_db), user = Depends(current_user)):
     allowed(user, aid)
     astro = db.get(Astronaut, aid)
     if not astro:
@@ -764,7 +718,7 @@ def hourly_telemetry(aid: int, metric: str = "Resting heart rate", day: int = 60
     return generate_hourly_telemetry(aid=aid, metric=metric, day=day)
 
 @app.get("/api/astronauts/{aid}/reports/daily")
-def get_daily_health_report(aid: int, day: int = 60, db: Session = Depends(get_db), user = Depends(current_user)):
+def get_daily_health_report(aid: int, day: int = 42, db: Session = Depends(get_db), user = Depends(current_user)):
     allowed(user, aid)
     astro = db.get(Astronaut, aid)
     if not astro:
@@ -774,7 +728,9 @@ def get_daily_health_report(aid: int, day: int = 60, db: Session = Depends(get_d
     return generate_daily_health_report(astro, meas, ass, mission_day=day)
 
 @app.post("/api/astronauts/{aid}/reports/daily/generate")
-def create_daily_health_report(aid: int, day: int = 60, db: Session = Depends(get_db), user = Depends(current_user)):
+def create_daily_health_report(aid: int, day: int = 42, db: Session = Depends(get_db), user = Depends(current_user)):
+    if user.role != "medical":
+        raise HTTPException(403, "Medical officer access required to create a review record")
     allowed(user, aid)
     astro = db.get(Astronaut, aid)
     if not astro:
@@ -783,22 +739,25 @@ def create_daily_health_report(aid: int, day: int = 60, db: Session = Depends(ge
     ass = db.query(Assessment).filter_by(astronaut_id=aid).order_by(Assessment.timestamp).all()
     report = generate_daily_health_report(astro, meas, ass, mission_day=day)
     
-    # Save as verified MedicalRecord in SQLite and Firebase
+    # Save as a draft summary. Generating a report is not a clinician review or sign-off.
     now_utc = datetime.now(timezone.utc)
     rec = MedicalRecord(
         astronaut_id=aid,
-        record_type="Clinical Evaluation",
-        title=f"Mission Day {day:03d} Clinical Health Assessment",
-        physician=report["physician"],
+        record_type="Prototype Monitoring Summary",
+        title=f"Mission Day {day:03d} Health Data Summary",
+        physician=user.full_name or user.username,
         findings=report["executive_summary"] + " " + "; ".join(
             [f"{b['title']}: {b['detail']}" for b in report["abnormal_behaviours"]]
         ),
         countermeasures="; ".join(report["countermeasures"]),
-        status="Signed & Verified",
+        status="Pending clinician review",
+        simulated=bool(astro.simulated),
         date=now_utc.strftime("%Y-%m-%d"),
         timestamp=now_utc
     )
     db.add(rec)
+    db.flush()
+    audit(db, user, "daily_summary_generated", "medical_record", rec.id)
     db.commit()
     db.refresh(rec)
 
@@ -812,14 +771,14 @@ def create_daily_health_report(aid: int, day: int = 60, db: Session = Depends(ge
         "findings": rec.findings,
         "countermeasures": rec.countermeasures,
         "status": rec.status,
+        "simulated": rec.simulated,
         "date": rec.date,
         "timestamp": rec.timestamp.isoformat(),
     }, method="PUT")
-
     return {
         "report": report,
         "medical_record_id": rec.id,
-        "message": f"Daily Clinical Report for {astro.name} (Day {day}) generated and saved to permanent medical records."
+        "message": f"Prototype data summary for {astro.name} (Day {day}) saved for clinician review."
     }
 
 @app.get("/api/astronauts/{aid}/warnings")
@@ -834,6 +793,12 @@ def astronaut_warnings(aid: int, db: Session = Depends(get_db), user = Depends(c
     return {
         "astronaut_id": aid,
         "flight_readiness_score": analysis["flight_readiness_score"],
+        "monitoring_coverage": analysis["monitoring_coverage"],
+        "score_label": analysis["score_label"],
+        "score_note": analysis["score_note"],
+        "evidence": analysis["evidence"],
+        "missing_metrics": analysis["missing_metrics"],
+        "calculation": analysis["calculation"],
         "overall_status": analysis["overall_status"],
         "abnormal_behaviours": analysis["abnormal_behaviours"],
         "recommendations": analysis["recommendations"]
@@ -841,26 +806,31 @@ def astronaut_warnings(aid: int, db: Session = Depends(get_db), user = Depends(c
 
 @app.post("/api/astronauts/{aid}/clearance")
 def update_flight_clearance(aid: int, data: ClearanceIn, db: Session = Depends(get_db), user = Depends(medical)):
+    if data.clearance not in {"FLIGHT READY", "RESTRICTED WORKLOAD", "MEDICAL HOLD", "UNREVIEWED"}:
+        raise HTTPException(422, "Unsupported clearance status")
     astro = db.get(Astronaut, aid)
     if not astro:
         raise HTTPException(404, "Astronaut not found")
     astro.status = data.clearance
     if hasattr(astro, "flight_clearance"):
         astro.flight_clearance = data.clearance
+    audit(db, user, "clearance_status_recorded", "astronaut", aid)
     
     now_utc = datetime.now(timezone.utc)
     rec = MedicalRecord(
         astronaut_id=aid,
-        record_type="Flight Clearance",
-        title=f"Flight Clearance Directive: {data.clearance}",
-        physician=user.full_name or "Dr. Robert Vance, CMO",
+        record_type="Clearance status change",
+        title=f"Clearance status recorded: {data.clearance}",
+        physician=user.full_name or user.username,
         findings=f"Flight clearance status updated to {data.clearance}. {data.notes}".strip(),
-        countermeasures="Continue nominal spaceflight countermeasure schedule." if data.clearance == "FLIGHT READY" else "Workload restricted; follow prescribed flight surgeon countermeasures.",
-        status="Signed & Verified",
+        countermeasures="",
+        status="Recorded by medical officer",
         date=now_utc.strftime("%Y-%m-%d"),
         timestamp=now_utc
     )
     db.add(rec)
+    db.flush()
+    audit(db, user, "clearance_change_recorded", "medical_record", rec.id)
     db.commit()
 
     fb_request(f"astronauts/{aid}/flight_clearance", data.clearance, method="PUT")
@@ -869,7 +839,8 @@ def update_flight_clearance(aid: int, data: ClearanceIn, db: Session = Depends(g
 
 @app.post("/api/astronauts/{aid}/request-consult")
 def request_consult(aid: int, data: ConsultIn, db: Session = Depends(get_db), user = Depends(current_user)):
-    allowed(user, aid)
+    if user.role != "astronaut" or user.astronaut_id != aid:
+        raise HTTPException(403, "Only the astronaut can request their own consultation")
     astro = db.get(Astronaut, aid)
     if not astro:
         raise HTTPException(404, "Astronaut not found")
@@ -881,6 +852,8 @@ def request_consult(aid: int, data: ConsultIn, db: Session = Depends(get_db), us
         reason=f"Astronaut {astro.name} ({astro.call_sign}) requested flight surgeon consultation: \"{data.note}\""
     )
     db.add(alt)
+    db.flush()
+    audit(db, user, "consultation_requested", "alert", alt.id)
     db.commit()
     db.refresh(alt)
 
@@ -894,7 +867,7 @@ def request_consult(aid: int, data: ConsultIn, db: Session = Depends(get_db), us
         "created_at": alt.created_at.isoformat(),
     }, method="PUT")
 
-    return {"message": "Consultation request sent to Flight Surgeon Dr. Robert Vance.", "alert_id": alt.id}
+    return {"message": "Consultation request recorded for the mission medical review queue.", "alert_id": alt.id}
 
 @app.get("/api/fleet/readiness")
 def fleet_readiness(db: Session = Depends(get_db), user = Depends(medical)):
@@ -906,10 +879,13 @@ def fleet_readiness(db: Session = Depends(get_db), user = Depends(medical)):
         analysis = analyze_crew_health(meas, ass, astronaut=a)
         out.append({
             "astronaut": serialize(a),
-            "flight_readiness_score": analysis["flight_readiness_score"],
+            "flight_readiness_score": analysis["monitoring_coverage"],
+            "monitoring_coverage": analysis["monitoring_coverage"],
+            "score_label": analysis["score_label"],
+            "missing_metrics": analysis["missing_metrics"],
             "overall_status": analysis["overall_status"],
             "abnormal_behaviours_count": len(analysis["abnormal_behaviours"]),
-            "flight_clearance": getattr(a, "flight_clearance", "FLIGHT READY") or a.status or "FLIGHT READY"
+            "flight_clearance": getattr(a, "flight_clearance", "UNREVIEWED") or "UNREVIEWED"
         })
     return out
 
@@ -922,7 +898,8 @@ def assessments(aid: int, db: Session = Depends(get_db), user = Depends(current_
 
 @app.post("/api/astronauts/{aid}/assessments")
 def add_assessment(aid: int, data: AssessmentIn, db: Session = Depends(get_db), user = Depends(current_user)):
-    allowed(user, aid)
+    if user.role != "astronaut" or user.astronaut_id != aid:
+        raise HTTPException(403, "Only the astronaut can submit their own self-assessment")
     x = Assessment(astronaut_id=aid, **data.model_dump())
     db.add(x)
     db.commit()
@@ -942,6 +919,53 @@ def add_assessment(aid: int, data: AssessmentIn, db: Session = Depends(get_db), 
     }, method="PUT")
     return serialize(x)
 
+COUNTERMEASURE_CATALOG = [
+    {"key": "aerobic", "title": "Assigned aerobic session", "description": "Record completion against your individual flight plan."},
+    {"key": "resistance", "title": "Assigned resistance session", "description": "Record completion against your individual flight plan."},
+    {"key": "hydration", "title": "Hydration check-in", "description": "Use the hydration guidance in your individual flight plan."},
+    {"key": "sleep", "title": "Sleep / circadian check-in", "description": "Record the planned sleep routine or any issue."},
+]
+
+@app.get("/api/astronauts/{aid}/countermeasures")
+def get_countermeasures(aid: int, date: str | None = None, db: Session = Depends(get_db), user = Depends(current_user)):
+    allowed(user, aid)
+    try:
+        session_day = datetime.strptime(date, "%Y-%m-%d").date() if date else datetime.now(timezone.utc).date()
+    except ValueError:
+        raise HTTPException(400, "date must use YYYY-MM-DD")
+    rows = db.query(CountermeasureCheck).filter_by(astronaut_id=aid, session_date=session_day).all()
+    by_key = {x.protocol_key: x for x in rows}
+    catalog = [{**item, "check": serialize(by_key[item["key"]]) if item["key"] in by_key else None} for item in COUNTERMEASURE_CATALOG]
+    completed = sum(bool(item["check"] and item["check"]["completed"]) for item in catalog)
+    history_rows = db.query(CountermeasureCheck).filter_by(astronaut_id=aid).order_by(desc(CountermeasureCheck.session_date)).limit(56).all()
+    return {"date": session_day.isoformat(), "items": catalog, "completed_count": completed,
+            "total_count": len(catalog), "completion_percent": round(100 * completed / len(catalog)),
+            "illustrative": True, "history": [serialize(x) for x in history_rows]}
+
+@app.put("/api/astronauts/{aid}/countermeasures/{protocol_key}")
+def update_countermeasure(aid: int, protocol_key: str, data: CountermeasureUpdate, date: str | None = None,
+                          db: Session = Depends(get_db), user = Depends(current_user)):
+    if user.role != "astronaut" or user.astronaut_id != aid:
+        raise HTTPException(403, "Only the astronaut can update their own checklist")
+    if protocol_key not in {x["key"] for x in COUNTERMEASURE_CATALOG}:
+        raise HTTPException(404, "Unknown checklist item")
+    try:
+        session_day = datetime.strptime(date, "%Y-%m-%d").date() if date else datetime.now(timezone.utc).date()
+    except ValueError:
+        raise HTTPException(400, "date must use YYYY-MM-DD")
+    row = db.query(CountermeasureCheck).filter_by(astronaut_id=aid, protocol_key=protocol_key, session_date=session_day).first()
+    if row is None:
+        row = CountermeasureCheck(astronaut_id=aid, protocol_key=protocol_key, session_date=session_day)
+        db.add(row)
+    row.completed = data.completed
+    row.session_minutes = data.session_minutes
+    row.session_note = data.session_note.strip()
+    row.source = "Astronaut self-report"
+    audit(db, user, "countermeasure_check_updated", "countermeasure_check", f"{aid}:{protocol_key}:{session_day}")
+    db.commit()
+    db.refresh(row)
+    return serialize(row)
+
 # ----------------- MEDICAL RECORDS & CLINICAL EVALUATIONS -----------------
 
 @app.get("/api/astronauts/{aid}/medical-records")
@@ -952,18 +976,22 @@ def get_medical_records(aid: int, db: Session = Depends(get_db), user = Depends(
 
 @app.post("/api/astronauts/{aid}/medical-records")
 def add_medical_record(aid: int, data: MedicalRecordIn, db: Session = Depends(get_db), user = Depends(medical)):
+    if not db.get(Astronaut, aid):
+        raise HTTPException(404, "Astronaut not found")
     rec = MedicalRecord(
         astronaut_id=aid,
         record_type=data.record_type,
         title=data.title,
-        physician=data.physician or f"Dr. {user.username.title()}, Flight Surgeon",
+        physician=user.full_name or user.username,
         findings=data.findings,
         countermeasures=data.countermeasures,
-        status=data.status or "Signed & Verified",
+        status="Pending clinician review",
         date=data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         timestamp=datetime.now(timezone.utc)
     )
     db.add(rec)
+    db.flush()
+    audit(db, user, "medical_record_created", "medical_record", rec.id)
     db.commit()
     db.refresh(rec)
     fb_request(f"medical_records/{aid}/{rec.id}", {
@@ -975,6 +1003,7 @@ def add_medical_record(aid: int, data: MedicalRecordIn, db: Session = Depends(ge
         "findings": rec.findings,
         "countermeasures": rec.countermeasures,
         "status": rec.status,
+        "simulated": rec.simulated,
         "date": rec.date,
         "timestamp": rec.timestamp.isoformat(),
     }, method="PUT")
@@ -1000,6 +1029,7 @@ def acknowledge(alert_id: int, data: Followup, db: Session = Depends(get_db), us
     a.acknowledged = True
     a.acknowledged_by = user.username
     a.follow_up = data.note
+    audit(db, user, "alert_acknowledged", "alert", alert_id)
     db.commit()
     fb_request(f"alerts/{alert_id}", {
         "acknowledged": True,
@@ -1024,34 +1054,71 @@ def documents(aid: int, db: Session = Depends(get_db), user = Depends(current_us
 
 @app.post("/api/astronauts/{aid}/documents")
 async def upload_document(aid: int, file: UploadFile = File(...), db: Session = Depends(get_db), user = Depends(medical)):
-    if not file.filename.lower().endswith(".pdf"):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Upload a PDF report")
-    content = await file.read()
+    content = await file.read(15 * 1024 * 1024 + 1)
+    if len(content) > 15 * 1024 * 1024:
+        raise HTTPException(413, "PDF exceeds the 15 MB upload limit")
+    if not content.startswith(b"%PDF-"):
+        raise HTTPException(400, "Uploaded file is not a valid PDF")
+    if not db.get(Astronaut, aid):
+        raise HTTPException(404, "Astronaut not found")
+    extraction_method = "selectable_text"
     try:
         try:
+            import fitz
+        except ImportError:
             import pypdf, io
             reader = pypdf.PdfReader(io.BytesIO(content))
-            text_extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
-        except ImportError:
-            import fitz
-            doc = fitz.open(stream=content, filetype="pdf")
-            text_extracted = "\n".join(page.get_text() for page in doc)
+            if reader.is_encrypted:
+                raise HTTPException(400, "Encrypted PDFs are not supported")
+            if not reader.pages or len(reader.pages) > 100:
+                raise HTTPException(400, "PDF must contain between 1 and 100 pages")
+            text_extracted = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+            extraction_method = "selectable_text" if text_extracted else "ocr_unavailable"
+        else:
+            pdf = fitz.open(stream=content, filetype="pdf")
+            if pdf.is_encrypted:
+                raise HTTPException(400, "Encrypted PDFs are not supported")
+            if pdf.page_count < 1 or pdf.page_count > 100:
+                raise HTTPException(400, "PDF must contain between 1 and 100 pages")
+            page_text = [page.get_text("text") or "" for page in pdf]
+            text_extracted = "\n".join(page_text).strip()
+            if not text_extracted:
+                try:
+                    import pytesseract
+                    from PIL import Image
+                    import io
+                    ocr_text = []
+                    for page in pdf:
+                        pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
+                        image = Image.open(io.BytesIO(pix.tobytes("png")))
+                        ocr_text.append(pytesseract.image_to_string(image))
+                    text_extracted = "\n".join(ocr_text).strip()
+                    extraction_method = "optional_ocr" if text_extracted else "ocr_empty"
+                except (ImportError, OSError, RuntimeError):
+                    text_extracted = ""
+                    extraction_method = "ocr_unavailable"
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(400, f"Could not read PDF: {e}")
-    
-    if not text_extracted.strip():
-        text_extracted = "No selectable text found. OCR was not available; values require manual review."
+        raise HTTPException(400, "Could not read PDF; it may be corrupted or unsupported") from e
+    if not text_extracted:
+        text_extracted = "No readable text was extracted. Enter values manually and review the source PDF."
+    detected_date = re.search(r"\b(20\d{2}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/20\d{2})\b", text_extracted)
     
     report = MedicalDocument(
         astronaut_id=aid,
-        filename=file.filename,
+        filename=Path(file.filename).name,
+        report_date=detected_date.group(1) if detected_date else "Unknown",
         extracted_text=text_extracted[:50000],
-        confidence=.82 if len(text_extracted) > 30 else .25
+        confidence=.72 if extraction_method == "selectable_text" and len(text_extracted) > 30 else (.45 if extraction_method == "optional_ocr" and len(text_extracted) > 30 else 0),
+        extraction_method=extraction_method,
     )
     db.add(report)
     db.flush()
     
-    for line in text_extracted.splitlines():
+    for line in text_extracted.splitlines()[:200]:
         match = re.match(r"\s*([A-Za-z][A-Za-z0-9 /()-]{1,50}?)\s{1,}(\d+(?:\.\d+)?)\s*([A-Za-z/%µμ^0-9.-]{0,16})\s*(?:\((?:ref(?:erence)?\s*)?([^)]{1,30})\))?\s*$", line, re.I)
         if match:
             db.add(MedicalObservation(
@@ -1060,7 +1127,8 @@ async def upload_document(aid: int, file: UploadFile = File(...), db: Session = 
                 result=match.group(2),
                 unit=match.group(3).strip(),
                 reference_range=(match.group(4) or "Unknown").strip(),
-                confidence=.55 if len(text_extracted) > 30 else .25
+                report_date=report.report_date,
+                confidence=min(report.confidence, .60),
             ))
     db.commit()
     db.refresh(report)
@@ -1075,7 +1143,7 @@ def verify_document(doc_id: int, db: Session = Depends(get_db), user = Depends(m
     if not d:
         raise HTTPException(404, "Document not found")
     d.verified = True
-    d.confidence = 1
+    audit(db, user, "document_reviewed", "medical_document", doc_id)
     db.commit()
     return serialize(d)
 
@@ -1088,12 +1156,34 @@ def document_observations(doc_id: int, db: Session = Depends(get_db), user = Dep
     return [serialize(o) for o in db.query(MedicalObservation).filter_by(document_id=doc_id).all()]
 
 @app.post("/api/observations/{observation_id}/verify")
-def verify_observation(observation_id: int, db: Session = Depends(get_db), user = Depends(medical)):
+def verify_observation(observation_id: int, data: ObservationReview | None = None, db: Session = Depends(get_db), user = Depends(medical)):
     o = db.get(MedicalObservation, observation_id)
     if not o:
         raise HTTPException(404, "Observation not found")
+    payload = data.model_dump(exclude_unset=True) if data else {}
+    for key in ("test_name", "result", "unit", "reference_range", "report_date"):
+        if payload.get(key) is not None:
+            setattr(o, key, payload[key].strip())
     o.verified = True
-    o.confidence = 1
+    o.review_status = "approved"
+    o.reviewed_by = user.username
+    o.reviewed_at = datetime.now(timezone.utc)
+    o.review_note = str(payload.get("review_note", ""))[:1000]
+    audit(db, user, "observation_approved", "medical_observation", observation_id)
+    db.commit()
+    return serialize(o)
+
+@app.post("/api/observations/{observation_id}/reject")
+def reject_observation(observation_id: int, data: ObservationReview | None = None, db: Session = Depends(get_db), user = Depends(medical)):
+    o = db.get(MedicalObservation, observation_id)
+    if not o:
+        raise HTTPException(404, "Observation not found")
+    o.verified = False
+    o.review_status = "rejected"
+    o.reviewed_by = user.username
+    o.reviewed_at = datetime.now(timezone.utc)
+    o.review_note = data.review_note if data else ""
+    audit(db, user, "observation_rejected", "medical_observation", observation_id)
     db.commit()
     return serialize(o)
 
@@ -1108,11 +1198,11 @@ def timeline(aid: int, db: Session = Depends(get_db), user = Depends(current_use
     for x in db.query(Assessment).filter_by(astronaut_id=aid).all():
         events.append({"id": f"a{x.id}", "timestamp": x.timestamp, "type": "assessment", "title": "Daily health assessment", "detail": f"Sleep {x.sleep_hours}h · Fatigue {x.fatigue}/10 · Stress {x.stress}/10", "simulated": x.simulated})
     for x in db.query(MedicalRecord).filter_by(astronaut_id=aid).all():
-        events.append({"id": f"r{x.id}", "timestamp": x.timestamp, "type": "record", "title": f"{x.record_type}: {x.title}", "detail": f"{x.physician} · {x.findings[:80]}…", "simulated": False})
+        events.append({"id": f"r{x.id}", "timestamp": x.timestamp, "type": "record", "title": f"{x.record_type}: {x.title}", "detail": f"{x.physician} · {x.findings[:80]}…", "simulated": x.simulated})
     for x in db.query(Alert).filter_by(astronaut_id=aid).all():
         events.append({"id": f"l{x.id}", "timestamp": x.created_at, "type": "alert", "title": f"{x.priority.title()} alert: {x.metric}", "detail": x.reason, "simulated": True})
     for x in db.query(MedicalDocument).filter_by(astronaut_id=aid).all():
-        events.append({"id": f"d{x.id}", "timestamp": x.uploaded_at, "type": "document", "title": f"Report uploaded: {x.filename}", "detail": "Verified" if x.verified else "Extracted observations pending human review", "simulated": False})
+        events.append({"id": f"d{x.id}", "timestamp": x.uploaded_at, "type": "document", "title": f"Report uploaded: {x.filename}", "detail": "Document reviewed" if x.verified else "Extracted observations pending human review", "simulated": x.simulated})
     return sorted(events, key=lambda x: x["timestamp"], reverse=True)
 
 @app.post("/api/assistant/ask")
@@ -1201,6 +1291,9 @@ def ask(data: Ask, db: Session = Depends(get_db), user = Depends(current_user)):
     }
     matched = [item for item in metric_summaries if any(alias in question_lower and alias in item["metric"].lower() for aliases in metric_aliases.values() for alias in aliases)]
     asks_alerts = any(term in question_lower for term in ("alert", "flag", "attention", "follow-up"))
+    asks_last7 = any(term in question_lower for term in ("last 7 days", "last seven days", "past week", "this week"))
+    asks_records = any(term in question_lower for term in ("medical record", "clinical record", "uploaded report"))
+    asks_timeline = any(term in question_lower for term in ("timeline", "sequence of events", "order of events", "mission events"))
     asks_summary = any(term in question_lower for term in ("summar", "overall", "recent", "changed", "change", "health status", "what is happening"))
     local_parts = []
     if asks_alerts:
@@ -1209,6 +1302,27 @@ def ask(data: Ask, db: Session = Depends(get_db), user = Depends(current_user)):
         closed_with_notes = [a for a in als if a.acknowledged and a.follow_up]
         if closed_with_notes:
             local_parts.append("Recorded follow-up: " + "; ".join(f"[L{a.id}] {a.metric}: {a.follow_up}" for a in closed_with_notes[:5]))
+    elif asks_last7:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+        recent_measurements = [row for row in rows if row.timestamp and (row.timestamp.replace(tzinfo=timezone.utc) if row.timestamp.tzinfo is None else row.timestamp) >= cutoff]
+        recent_assessments = [a for a in reversed(assessments) if a.timestamp and (a.timestamp.replace(tzinfo=timezone.utc) if a.timestamp.tzinfo is None else a.timestamp) >= cutoff]
+        if recent_measurements:
+            local_parts.append("Measurements recorded in the last seven days: " + "; ".join(f"[M{x.id}] {x.metric} {x.value:g} {x.unit} at {x.timestamp.isoformat()} (source: {x.source}; simulated={x.simulated})" for x in recent_measurements[-20:]))
+        else: local_parts.append("No measurements were recorded in the last seven days.")
+        if recent_assessments:
+            local_parts.append("Self-reports: " + "; ".join(f"[A{x.id}] sleep {x.sleep_hours:g} h, fatigue {x.fatigue}/10, stress {x.stress}/10 at {x.timestamp.isoformat()} (simulated={x.simulated})" for x in recent_assessments))
+        else: local_parts.append("No self-reports were recorded in the last seven days.")
+    elif asks_records:
+        local_parts.append("Available medical records: " + ("; ".join(f"[R{x.id}] {x.title} ({x.record_type}, status: {x.status}) — {x.findings}" for x in recs[:8]) if recs else "none."))
+        for doc in docs[:5]:
+            local_parts.append(f"[D{doc.id}] Uploaded file {doc.filename}: extraction confidence {doc.confidence:.0%}; document verified={doc.verified}; extracted contents are not confirmed observations until reviewed.")
+    elif asks_timeline:
+        events = [(x.timestamp, f"[M{x.id}] {x.metric} {x.value:g} {x.unit}") for x in rows]
+        events += [(x.timestamp, f"[A{x.id}] self-report: sleep {x.sleep_hours:g} h, fatigue {x.fatigue}/10, symptoms: {x.symptoms}") for x in assessments]
+        events += [(x.created_at, f"[L{x.id}] alert: {x.metric} ({'acknowledged' if x.acknowledged else 'open'})") for x in als]
+        events += [(x.timestamp, f"[R{x.id}] record: {x.title} ({x.status})") for x in recs]
+        events.sort(key=lambda x: (x[0].replace(tzinfo=timezone.utc) if x[0] and x[0].tzinfo is None else x[0]) or datetime.min.replace(tzinfo=timezone.utc))
+        local_parts.append("Mission record sequence (chronological): " + ("; ".join(text for _, text in events[-20:]) if events else "no events are recorded."))
     elif matched:
         for item in matched[:5]:
             if item["baseline"] is None:
@@ -1276,4 +1390,9 @@ def ask(data: Ask, db: Session = Depends(get_db), user = Depends(current_user)):
 @app.get("/api/assistant/status")
 def assistant_status(user = Depends(current_user)):
     configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
-    return {"configured": configured, "mode": "Gemini" if configured else "Local evidence", "model": os.getenv("GEMINI_MODEL", "gemini-3.8-flash") if configured else None}
+    return {"configured": configured, "mode": "LIVE AI MODE" if configured else "LOCAL FALLBACK MODE", "model": os.getenv("GEMINI_MODEL", "gemini-3.8-flash") if configured else None}
+
+@app.get("/api/audit-events")
+def audit_events(limit: int = 100, db: Session = Depends(get_db), user = Depends(medical)):
+    limit = min(max(limit, 1), 500)
+    return [serialize(x) for x in db.query(AuditEvent).order_by(desc(AuditEvent.occurred_at)).limit(limit).all()]

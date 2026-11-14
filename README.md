@@ -1,13 +1,15 @@
 # ORBITCARE
 
-An integrated astronaut health intelligence and decision-support prototype. It combines simulated telemetry, self-reported assessments, medical report text extraction, personal baselines, deterministic alerts, a mission timeline, and a project-data-grounded assistant. This is not a clinically validated product; demo records are labeled simulated and alerts are not diagnoses.
+ORBITCARE is a prototype astronaut health monitoring and decision-support application. It combines simulated mission telemetry, astronaut self-reports, personal baselines, deterministic deviation flags, medical document review, daily data summaries, a mission timeline, a countermeasure check-in list, and a record-grounded assistant. It is not a clinically validated product, does not diagnose, and does not make flight-clearance decisions.
 
 ## Requirements
 
 - Python 3.10+
 - Node.js 20+
 
-## Start the backend
+## Run locally
+
+In PowerShell, from the repository root:
 
 ```powershell
 cd backend
@@ -18,43 +20,46 @@ Copy-Item .env.example .env
 uvicorn app.main:app --reload
 ```
 
-The API documentation is available at http://localhost:8000/docs. The default backend uses in-memory SQLite. If `backend/.env` defines `DATABASE_URL`, it uses that database instead. It seeds three simulated astronauts on startup when no Firebase crew data is available.
-
-Demo logins use password `orbitcare-demo`:
-
-- Medical officer: `medical`
-- Astronaut: `astronaut`
-
-To enable Gemini, copy `backend/.env.example` to `backend/.env`, set `GEMINI_API_KEY`, and restart the backend. `GEMINI_MODEL` defaults to `gemini-3.8-flash`. Without a key, the assistant still answers from local project records and personal baselines. If Gemini is unreachable or rejects a request, it falls back to the same record-grounded response and explains that fallback in the UI. The key stays on the backend. PDF text extraction uses PyMuPDF; scanned PDFs are retained with a low confidence indicator and require human review because OCR is not configured.
-
-## Start the frontend
-
-From the repository root:
+In a second terminal from the repository root:
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173. Vite proxies no requests: the frontend calls the local backend at `http://localhost:8000/api`.
+Open http://localhost:5173. The backend API and interactive docs are at http://localhost:8000 and http://localhost:8000/docs. SQLite persists to `backend/orbitcare.db` when started from `backend`. Set `DATABASE_URL` to a managed database for deployments; local SQLite files may not persist on serverless hosts.
 
-## Functional areas
+The fresh local demo seeds three simulated astronauts in **Mars Transit — Day 42**. Maya Chen's sample includes resting heart rate 65→82 BPM, HRV 65→42 ms, sleep 7.5→5 hours and fatigue 2→7/10. These values are illustrative demo data. Demo logins use password `orbitcare-demo`: `medical` (medical officer), `maya` / `astronaut` (Maya), `elena`, and `david`. Change credentials and the local demo `SECRET_KEY` before any deployment.
 
-- JWT login with medical officer and astronaut roles; astronaut users are limited to their own data.
-- Five health domains, sourced measurements, timestamps, quality flags, and explicit simulation labels.
-- Robust median/MAD personal baselines (minimum five historical observations).
-- Deterministic deviations and persistence signals; alert severity is independent of Gemini.
-- Medical officer acknowledgement with persistent follow-up notes.
-- PDF text extraction with confidence and verification state.
-- Chronological mission timeline for telemetry, assessments, reports, and alerts.
-- Gemini assistant retrieval from project records, with a local fallback.
+## Configuration
 
-## Tests
+- **Gemini:** set `GEMINI_API_KEY` in `backend/.env` to enable live model responses. `GEMINI_MODEL` defaults to `gemini-3.8-flash`. Without a key, the assistant uses local record retrieval and displays `LOCAL FALLBACK MODE`. The key is used only by the backend.
+- **Scanned PDF OCR (optional):** install `pip install -r requirements-ocr.txt` from `backend`, then install the Tesseract executable separately and ensure it is on `PATH` (or configure pytesseract's executable path). Without those pieces, selectable PDF text extraction still works and scanned PDFs are stored with OCR unavailable status for manual review.
+- **Firebase (optional):** backend sync is disabled unless both `FIREBASE_DATABASE_URL` and `FIREBASE_DATABASE_SECRET` are configured. Firebase is not used as the source of user identities, roles, or password hashes. Use restrictive database rules and a least-privilege credential.
+- **CORS:** add deployed frontend origins as a comma-separated `FRONTEND_ORIGINS` value. Avoid wildcard origins.
+- **Production:** set a strong unique `SECRET_KEY`; production startup fails when it is missing. Configure an external persistent `DATABASE_URL` where the host does not preserve files.
 
-Run backend checks from `backend`:
+## Included workflows
 
-```powershell
-pytest
-```
+- JWT authentication and role checks for astronaut and medical-officer endpoints.
+- Astronaut private data isolation; astronauts submit only their own self-reports and checklist updates.
+- Robust median/MAD personal baselines with insufficient-history handling and quality exclusions.
+- Deterministic, deduplicated deviation alerts with an explanation and source measurement.
+- Explicit source, timestamp, and simulated-data flags.
+- Medical-only PDF upload with selectable text extraction and optional OCR; parsed observations remain pending until a medical officer reviews, edits, approves, or rejects each candidate.
+- Database-persisted daily checklist check-ins with date-based history; the entries are illustrative, self-reported and have no prescribed duration or dose.
+- Prototype monitoring coverage, baseline comparisons, missing-data listing, and separate deviation flags. Coverage is not a clinical score or clearance.
+- Local evidence assistant and optional backend-only Gemini responses with citations.
+- Audit events for key record, alert, clearance, observation-review, and checklist actions. Audit entries do not duplicate medical content.
 
-The demonstration scenario uses illustrative values only (including heart rate 65→82 bpm, HRV 65→42 ms, sleep 7.5→5 hours, and fatigue 2→7/10); these are not clinical thresholds.
+## Tests and build
+
+From `backend`, run `pytest -q`. From the repository root, run `npm run build`.
+
+## Limitations
+
+- Demo sensor and self-report data are simulated. The display's live refresh reads the latest stored sample; no real spacecraft telemetry adapter is included.
+- OCR relies on local Tesseract and can produce errors; extracted values must be checked against the source document. This prototype does not interpret reference ranges as diagnoses.
+- Gemini mode requires an available API key/model and network access; the local assistant remains available when Gemini is unavailable.
+- The app has not been independently security audited and does not claim regulatory compliance, encryption at rest, or clinical validation.
+- Existing databases created before this update receive additive SQLite column migrations. The Mars Transit demo seed is only inserted into an empty database; existing data is not overwritten.
