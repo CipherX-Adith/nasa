@@ -31,7 +31,8 @@ import {
   Wind,
 } from 'lucide-react';
 
-const API = 'http://localhost:8000/api';
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000/api' : '/api');
+const API = API_BASE.replace(/\/+$/, '');
 type Any = Record<string, any>;
 
 const fmt = (s: string) =>
