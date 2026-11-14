@@ -2037,3 +2037,378 @@ td {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+
+/* ==========================================================================
+   AUTHENTICATION, CREW APPROVALS & MEDICAL RECORDS ENHANCEMENTS
+   ========================================================================== */
+
+/* Auth Mode Tabs (Sign In vs Request Account) */
+.auth-tabs {
+  display: flex;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-panel);
+  border-radius: 9px;
+  padding: 3px;
+  margin-bottom: 20px;
+  gap: 4px;
+}
+
+.auth-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: 600 12px 'DM Sans', sans-serif;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auth-tab-btn.active {
+  background: var(--bg-card);
+  color: var(--text-heading);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.auth-tab-btn:hover:not(.active) {
+  color: var(--text-main);
+}
+
+/* Pending Clearance Alert on Login */
+.login-pending-alert {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 12px 0 16px;
+  color: #d97706;
+  font: 500 12px/1.45 'DM Sans', sans-serif;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.login-pending-alert strong {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 2px;
+  color: #b45309;
+}
+
+/* Registration Success Callout */
+.reg-success-card {
+  background: rgba(13, 148, 136, 0.1);
+  border: 1px solid rgba(13, 148, 136, 0.3);
+  border-radius: 10px;
+  padding: 16px;
+  margin: 14px 0 20px;
+  text-align: left;
+}
+
+.reg-success-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 13px Manrope, sans-serif;
+  color: #0d9488;
+  margin-bottom: 6px;
+}
+
+.reg-success-card p {
+  font: 500 12px/1.5 'DM Sans', sans-serif;
+  color: var(--text-main);
+  margin: 0 0 12px;
+}
+
+/* Status Badges */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 700 10px 'DM Mono', monospace;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+}
+
+.status-pill.approved {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-pill.pending_approval {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-pill.rejected {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Crew Accounts Dashboard Styles */
+.crew-accounts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.approval-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.applicant-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-panel);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  box-shadow: var(--shadow-panel);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.applicant-card:hover {
+  border-color: #0d9488;
+}
+
+.applicant-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.applicant-name {
+  font: 700 15px Manrope, sans-serif;
+  color: var(--text-heading);
+}
+
+.applicant-meta {
+  font: 500 11.5px 'DM Sans', sans-serif;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.applicant-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.applicant-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.btn-approve {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #0d9488;
+  color: #ffffff;
+  border: none;
+  border-radius: 7px;
+  font: 600 12px 'DM Sans', sans-serif;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-approve:hover {
+  background: #0f766e;
+}
+
+.btn-decline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  border-radius: 7px;
+  font: 600 12px 'DM Sans', sans-serif;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-decline:hover {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+/* Direct Create Form */
+.direct-create-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-panel);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-top: 14px;
+}
+
+.direct-create-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.direct-create-grid label {
+  font: 600 11px 'DM Sans', sans-serif;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.direct-create-grid input,
+.direct-create-grid select {
+  font: 500 12.5px 'DM Sans', sans-serif;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-input);
+  background: var(--bg-panel);
+  color: var(--text-main);
+}
+
+/* Roster Table */
+.roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 500 12.5px 'DM Sans', sans-serif;
+  margin-top: 12px;
+}
+
+.roster-table th {
+  text-align: left;
+  font: 600 10.5px 'DM Mono', monospace;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-panel);
+  background: var(--bg-subtle);
+}
+
+.roster-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-main);
+}
+
+.roster-user-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.roster-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(13, 148, 136, 0.12);
+  color: #0d9488;
+  display: grid;
+  place-items: center;
+  font: 700 10.5px 'DM Mono', monospace;
+}
+
+/* Medical Records Clinical Section */
+.med-records-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.med-records-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.med-record-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-panel);
+  border-left: 4px solid #0d9488;
+  border-radius: 10px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow-panel);
+  transition: transform 0.15s ease;
+}
+
+.med-record-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+  gap: 12px;
+}
+
+.med-record-title {
+  font: 700 15px Manrope, sans-serif;
+  color: var(--text-heading);
+  margin: 0 0 4px;
+}
+
+.med-record-physician {
+  font: 500 11.5px 'DM Mono', monospace;
+  color: var(--text-muted);
+}
+
+.med-record-findings {
+  font: 400 13px/1.55 'DM Sans', sans-serif;
+  color: var(--text-main);
+  background: var(--bg-subtle);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 10px 0;
+}
+
+.med-countermeasure-callout {
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px dashed rgba(13, 148, 136, 0.35);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font: 500 12.5px 'DM Sans', sans-serif;
+  color: var(--text-main);
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.med-countermeasure-callout strong {
+  color: #0d9488;
+  white-space: nowrap;
+}
+
+/* Sidebar Nav Badge */
+.nav-badge {
+  background: #f59e0b;
+  color: #ffffff;
+  font: 700 10px 'DM Mono', monospace;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  margin-left: auto;
+}

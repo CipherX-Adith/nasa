@@ -13,9 +13,12 @@ import {
   Activity,
   AlertTriangle,
   Atom,
+  BadgeCheck,
   Check,
+  CheckCircle2,
   ChevronDown,
   Clock3,
+  FilePlus,
   FileText,
   HeartPulse,
   LayoutDashboard,
@@ -24,17 +27,29 @@ import {
   Moon,
   Plus,
   ShieldCheck,
+  Stethoscope,
   Sun,
   Upload,
   UserCheck,
+  UserPlus,
   Users,
   Wind,
+  XCircle,
 } from 'lucide-react';
 import {
   isFirebaseEnabled,
   subscribeToAssessments,
   saveAssessmentToFirebase,
   streamTelemetryToFirebase,
+  firebaseRegisterUser,
+  subscribeToFirebaseUsers,
+  firebaseApproveUser,
+  firebaseRejectUser,
+  firebaseDirectCreateAstronaut,
+  subscribeToMedicalRecords,
+  saveMedicalRecordToFirebase,
+  type FirebaseUserRecord,
+  type FirebaseMedicalRecord,
 } from './firebase';
 
 const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000/api' : '/api');
@@ -113,6 +128,51 @@ export default function App() {
   const [usernameInput, setUsernameInput] = useState('medical');
   const [passwordInput, setPasswordInput] = useState('orbitcare-demo');
 
+  // Authentication & Registration mode
+  const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin');
+  const [loginClearancePending, setLoginClearancePending] = useState(false);
+
+  // Astronaut Registration Form state
+  const [regFullName, setRegFullName] = useState('');
+  const [regUsername, setRegUsername] = useState('');
+  const [regPassword, setRegPassword] = useState('orbitcare-demo');
+  const [regCallSign, setRegCallSign] = useState('');
+  const [regMission, setRegMission] = useState('Asteria-7');
+  const [regSpecialization, setRegSpecialization] = useState('Mission Specialist');
+  const [regBusy, setRegBusy] = useState(false);
+  const [regSuccess, setRegSuccess] = useState(false);
+  const [regMessage, setRegMessage] = useState('');
+  const [regError, setRegError] = useState('');
+
+  // Admin User & Crew Clearance Management state
+  const [systemUsers, setSystemUsers] = useState<Any[]>([]);
+  const [adminActionBusy, setAdminActionBusy] = useState(false);
+
+  // Direct Astronaut Provisioning state (Admin only)
+  const [directName, setDirectName] = useState('');
+  const [directUsername, setDirectUsername] = useState('');
+  const [directPassword, setDirectPassword] = useState('orbitcare-demo');
+  const [directCallSign, setDirectCallSign] = useState('');
+  const [directMission, setDirectMission] = useState('Asteria-7');
+  const [directSpecialization, setDirectSpecialization] = useState('Mission Specialist');
+  const [directBusy, setDirectBusy] = useState(false);
+  const [directSuccess, setDirectSuccess] = useState('');
+  const [directError, setDirectError] = useState('');
+
+  // Clinical Medical Records state (Firebase & Database)
+  const [medicalRecords, setMedicalRecords] = useState<Any[]>([]);
+  const [showAddMedRecordModal, setShowAddMedRecordModal] = useState(false);
+  const [newMedRecord, setNewMedRecord] = useState({
+    record_type: 'Clinical Evaluation',
+    title: '',
+    physician: 'Dr. Robert Vance, Flight Surgeon',
+    findings: '',
+    countermeasures: '',
+    status: 'Signed & Verified',
+    date: new Date().toISOString().split('T')[0],
+  });
+  const [medRecordSubmitting, setMedRecordSubmitting] = useState(false);
+
   // Selected pill in the Mission Telemetry Trend card
   const [selectedMetric, setSelectedMetric] = useState('Heart Rate');
 
@@ -163,10 +223,200 @@ export default function App() {
         setSelected(null);
       }
       setError('');
+      setLoginClearancePending(false);
     } catch (x: any) {
-      setError(x.message);
+      const msg = x.message || 'Login failed';
+      if (msg.toLowerCase().includes('pending') || msg.toLowerCase().includes('clearance')) {
+        setLoginClearancePending(true);
+      } else {
+        setLoginClearancePending(false);
+      }
+      setError(msg);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function registerAstronaut(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setRegBusy(true);
+    setRegError('');
+    setRegSuccess(false);
+
+    try {
+      const payload = {
+        username: regUsername.trim().toLowerCase(),
+        password: regPassword,
+        full_name: regFullName.trim(),
+        call_sign: regCallSign.trim() || `CREW-${Math.floor(10 + Math.random() * 90)}`,
+        mission: regMission.trim() || 'Asteria-7',
+        specialization: regSpecialization.trim() || 'Mission Specialist',
+      };
+
+      // 1. Submit to Backend API
+      await api('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      // 2. Submit to Firebase (Realtime Database + Firestore)
+      try {
+        await firebaseRegisterUser({
+          username: payload.username,
+          password: payload.password,
+          name: payload.full_name,
+          call_sign: payload.call_sign,
+          mission: payload.mission,
+          specialization: payload.specialization,
+        });
+      } catch (fbErr) {
+        console.warn('Firebase registration notice:', fbErr);
+      }
+
+      setRegSuccess(true);
+      setRegMessage(
+        `Application submitted for ${payload.full_name} (${payload.call_sign})! Status: PENDING FLIGHT SURGEON APPROVAL. Your credentials have been entered into the mission database. For flight safety, the Medical Officer (Admin) must evaluate and approve your flight clearance before login access is granted.`
+      );
+    } catch (err: any) {
+      setRegError(err.message || 'Registration failed');
+    } finally {
+      setRegBusy(false);
+    }
+  }
+
+  async function loadAdminUsers() {
+    if (!token || user?.role !== 'medical') return;
+    try {
+      const u = await api('/admin/users');
+      if (Array.isArray(u)) {
+        setSystemUsers(u);
+      }
+    } catch (e) {
+      console.warn('Could not load admin users:', e);
+    }
+  }
+
+  async function handleApproveUser(targetUser: Any) {
+    try {
+      setAdminActionBusy(true);
+      const res = await api(`/admin/users/${targetUser.id}/approve`, { method: 'POST' });
+      const assignedAstroId = res.astronaut_id || targetUser.astronaut_id || 4;
+
+      try {
+        await firebaseApproveUser(targetUser.username, assignedAstroId, user?.username || 'medical');
+      } catch (e) {
+        console.warn('Firebase approve error:', e);
+      }
+
+      await load();
+      await loadAdminUsers();
+    } catch (e: any) {
+      alert(`Approval error: ${e.message}`);
+    } finally {
+      setAdminActionBusy(false);
+    }
+  }
+
+  async function handleRejectUser(targetUser: Any) {
+    try {
+      setAdminActionBusy(true);
+      await api(`/admin/users/${targetUser.id}/reject`, { method: 'POST' });
+      try {
+        await firebaseRejectUser(targetUser.username);
+      } catch (e) {
+        console.warn('Firebase reject error:', e);
+      }
+      await loadAdminUsers();
+    } catch (e: any) {
+      alert(`Rejection error: ${e.message}`);
+    } finally {
+      setAdminActionBusy(false);
+    }
+  }
+
+  async function handleDirectCreateAstronaut(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setDirectBusy(true);
+    setDirectError('');
+    setDirectSuccess('');
+
+    try {
+      const payload = {
+        name: directName.trim(),
+        username: directUsername.trim().toLowerCase(),
+        password: directPassword || 'orbitcare-demo',
+        call_sign: directCallSign.trim() || `ASTRO-${Math.floor(10 + Math.random() * 90)}`,
+        mission: directMission.trim() || 'Asteria-7',
+        specialization: directSpecialization.trim() || 'Mission Specialist',
+      };
+
+      const res = await api('/admin/astronauts/create', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const newAstroId = res.astronaut?.id;
+      try {
+        await firebaseDirectCreateAstronaut(payload, newAstroId);
+      } catch (e) {
+        console.warn('Firebase direct create notice:', e);
+      }
+
+      setDirectSuccess(`Astronaut ${payload.name} (${payload.call_sign}) successfully created and cleared for flight!`);
+      setDirectName('');
+      setDirectUsername('');
+      setDirectCallSign('');
+      await load();
+      await loadAdminUsers();
+    } catch (e: any) {
+      setDirectError(e.message || 'Failed to create astronaut');
+    } finally {
+      setDirectBusy(false);
+    }
+  }
+
+  async function handleAddMedicalRecord(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!selected) return;
+    setMedRecordSubmitting(true);
+
+    try {
+      const payload = {
+        record_type: newMedRecord.record_type,
+        title: newMedRecord.title,
+        physician: newMedRecord.physician || `Dr. ${user?.username?.toUpperCase() || 'VANCE'}, Flight Surgeon`,
+        findings: newMedRecord.findings,
+        countermeasures: newMedRecord.countermeasures,
+        status: newMedRecord.status || 'Signed & Verified',
+        date: newMedRecord.date || new Date().toISOString().split('T')[0],
+      };
+
+      await api(`/astronauts/${selected}/medical-records`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      try {
+        await saveMedicalRecordToFirebase(selected, payload);
+      } catch (e) {
+        console.warn('Firebase medical record note:', e);
+      }
+
+      await load();
+      setShowAddMedRecordModal(false);
+      setNewMedRecord({
+        record_type: 'Clinical Evaluation',
+        title: '',
+        physician: 'Dr. Robert Vance, Flight Surgeon',
+        findings: '',
+        countermeasures: '',
+        status: 'Signed & Verified',
+        date: new Date().toISOString().split('T')[0],
+      });
+    } catch (e: any) {
+      alert(`Could not save medical record: ${e.message}`);
+    } finally {
+      setMedRecordSubmitting(false);
     }
   }
 
@@ -183,19 +433,23 @@ export default function App() {
       setSelected(id);
 
       if (id) {
-        const [m, b, l, t, d, ass] = await Promise.all([
+        const [m, b, l, t, d, ass, recs] = await Promise.all([
           api(`/astronauts/${id}/measurements`),
           api(`/astronauts/${id}/baselines`),
           api(`/alerts?astronaut_id=${id}`),
           api(`/timeline/${id}`),
           api(`/astronauts/${id}/documents`),
           api(`/astronauts/${id}/assessments`),
+          api(`/astronauts/${id}/medical-records`).catch(() => []),
         ]);
         setMeasurements(m);
         setBaselines(b);
         setAlerts(l);
         setTimeline(t);
         setDocs(d);
+        if (Array.isArray(recs)) {
+          setMedicalRecords(recs);
+        }
 
         // Merge server assessments with locally stored assessments (resilient across serverless containers)
         let mergedAss = Array.isArray(ass) ? [...ass] : [];
@@ -212,6 +466,10 @@ export default function App() {
         } catch {}
         mergedAss.sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
         setAssessmentsList(mergedAss);
+      }
+
+      if (user?.role === 'medical') {
+        loadAdminUsers();
       }
     } catch (e: any) {
       setError(e.message);
@@ -411,6 +669,48 @@ export default function App() {
 
     return () => unsubscribe();
   }, [firebaseActive, selected, user, astronaut, astronauts]);
+
+  // Firebase Real-time Users Subscription (for Admin approvals)
+  useEffect(() => {
+    if (!firebaseActive || !isAdmin) return;
+    const unsub = subscribeToFirebaseUsers((fbUsers) => {
+      if (fbUsers && fbUsers.length > 0) {
+        setSystemUsers((prev) => {
+          const map = new Map<string, Any>();
+          for (const u of prev) map.set(u.username, u);
+          for (const u of fbUsers) {
+            const existing = map.get(u.username) || {};
+            map.set(u.username, { ...existing, ...u });
+          }
+          return Array.from(map.values());
+        });
+      }
+    });
+    return () => unsub();
+  }, [firebaseActive, isAdmin]);
+
+  // Firebase Real-time Medical Records Subscription
+  useEffect(() => {
+    const aid =
+      user?.role !== 'medical' && user?.astronaut_id
+        ? user.astronaut_id
+        : selected || astronaut?.id || astronauts[0]?.id || 1;
+    if (!aid) return;
+
+    const unsub = subscribeToMedicalRecords(aid, (fbRecs) => {
+      if (fbRecs && fbRecs.length > 0) {
+        setMedicalRecords((prev) => {
+          const map = new Map<string, Any>();
+          for (const r of prev) map.set(r.id || r.title, r);
+          for (const r of fbRecs) map.set(r.id || r.title, r);
+          return Array.from(map.values()).sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+        });
+      }
+    });
+    return () => unsub();
+  }, [selected, user, astronaut, astronauts]);
 
   // Mapping from pill label to underlying measurement metric in database
   const metricMap: Record<string, string> = {
@@ -952,6 +1252,9 @@ export default function App() {
     </section>
   );
 
+  const pendingUsers = systemUsers.filter((u: Any) => u.status === 'pending_approval');
+  const pendingApplicantsCount = pendingUsers.length;
+
   if (!token) {
     return (
       <main className="login">
@@ -978,87 +1281,250 @@ export default function App() {
             in context.
           </h1>
           <p className="muted">
-            Sign in as <b>Medical Officer (Admin)</b> to monitor the entire crew, or as an <b>Astronaut (User)</b> to view your personal biometric telemetry.
+            Sign in as <b>Medical Officer (Admin)</b> to evaluate crew and grant flight clearances, or as an <b>Astronaut (User)</b> to submit assessments and view personal telemetry.
           </p>
 
-          <form onSubmit={login}>
-            <label>
-              Username
-              <input
-                name="username"
-                value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
-                required
-              />
-            </label>
-            <label>
-              Password
-              <input
-                name="password"
-                type="password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                required
-              />
-            </label>
-            {error && <p className="error">{error}</p>}
-            <button disabled={busy}>
-              {busy ? 'Signing in…' : 'Sign in to Dashboard'} <span>→</span>
+          {/* Auth Mode Switcher */}
+          <div className="auth-tabs">
+            <button
+              type="button"
+              className={`auth-tab-btn ${authMode === 'signin' ? 'active' : ''}`}
+              onClick={() => {
+                setAuthMode('signin');
+                setError('');
+                setLoginClearancePending(false);
+              }}
+            >
+              <Users size={14} />
+              <span>Sign In</span>
             </button>
-          </form>
-
-          {/* Quick Access Role Presets */}
-          <div className="login-roles">
-            <div className="login-roles-title">QUICK ACCESS DEMO PRESETS:</div>
-            <div className="login-roles-buttons">
-              <button
-                type="button"
-                className="role-preset-btn admin-preset"
-                onClick={() => {
-                  setUsernameInput('medical');
-                  setPasswordInput('orbitcare-demo');
-                }}
-              >
-                <ShieldCheck size={14} color="#d97706" />
-                <span>Admin (Medical Officer)</span>
-              </button>
-              <button
-                type="button"
-                className="role-preset-btn"
-                onClick={() => {
-                  setUsernameInput('astronaut');
-                  setPasswordInput('orbitcare-demo');
-                }}
-              >
-                <Users size={14} color="#0284c7" />
-                <span>User (Maya Chen)</span>
-              </button>
-              <button
-                type="button"
-                className="role-preset-btn"
-                onClick={() => {
-                  setUsernameInput('elena');
-                  setPasswordInput('orbitcare-demo');
-                }}
-              >
-                <Users size={14} color="#0284c7" />
-                <span>User (Elena Rossi)</span>
-              </button>
-              <button
-                type="button"
-                className="role-preset-btn"
-                onClick={() => {
-                  setUsernameInput('david');
-                  setPasswordInput('orbitcare-demo');
-                }}
-              >
-                <Users size={14} color="#0284c7" />
-                <span>User (David Okafor)</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              className={`auth-tab-btn ${authMode === 'register' ? 'active' : ''}`}
+              onClick={() => {
+                setAuthMode('register');
+                setError('');
+                setLoginClearancePending(false);
+              }}
+            >
+              <UserPlus size={14} />
+              <span>Request Astronaut Account</span>
+            </button>
           </div>
 
-          <div className="credentials">
+          {/* SIGN IN FORM */}
+          {authMode === 'signin' && (
+            <>
+              {loginClearancePending && (
+                <div className="login-pending-alert">
+                  <AlertTriangle size={18} color="#d97706" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <strong>Flight Clearance Pending Authorization</strong>
+                    Your astronaut account has been created and registered in the mission database. For flight safety, the <b>Flight Surgeon / Medical Officer (Admin)</b> must verify your credentials and approve your account before you can log in.
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={login}>
+                <label>
+                  Username
+                  <input
+                    name="username"
+                    value={usernameInput}
+                    onChange={(e) => setUsernameInput(e.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  Password
+                  <input
+                    name="password"
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    required
+                  />
+                </label>
+                {error && !loginClearancePending && <p className="error">{error}</p>}
+                <button disabled={busy}>
+                  {busy ? 'Verifying Flight Clearance…' : 'Sign in to Dashboard'} <span>→</span>
+                </button>
+              </form>
+
+              {/* Quick Access Role Presets */}
+              <div className="login-roles">
+                <div className="login-roles-title">QUICK ACCESS DEMO PRESETS:</div>
+                <div className="login-roles-buttons">
+                  <button
+                    type="button"
+                    className="role-preset-btn admin-preset"
+                    onClick={() => {
+                      setUsernameInput('medical');
+                      setPasswordInput('orbitcare-demo');
+                      setError('');
+                      setLoginClearancePending(false);
+                    }}
+                  >
+                    <ShieldCheck size={14} color="#d97706" />
+                    <span>Admin (Medical Officer)</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="role-preset-btn"
+                    onClick={() => {
+                      setUsernameInput('astronaut');
+                      setPasswordInput('orbitcare-demo');
+                      setError('');
+                      setLoginClearancePending(false);
+                    }}
+                  >
+                    <Users size={14} color="#0284c7" />
+                    <span>User (Maya Chen)</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="role-preset-btn"
+                    onClick={() => {
+                      setUsernameInput('elena');
+                      setPasswordInput('orbitcare-demo');
+                      setError('');
+                      setLoginClearancePending(false);
+                    }}
+                  >
+                    <Users size={14} color="#0284c7" />
+                    <span>User (Elena Rossi)</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="role-preset-btn"
+                    onClick={() => {
+                      setUsernameInput('david');
+                      setPasswordInput('orbitcare-demo');
+                      setError('');
+                      setLoginClearancePending(false);
+                    }}
+                  >
+                    <Users size={14} color="#0284c7" />
+                    <span>User (David Okafor)</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* REQUEST ASTRONAUT ACCOUNT FORM */}
+          {authMode === 'register' && (
+            <>
+              {regSuccess ? (
+                <div className="reg-success-card">
+                  <div className="reg-success-head">
+                    <CheckCircle2 size={16} />
+                    <span>APPLICATION TRANSMITTED TO MISSION CONTROL</span>
+                  </div>
+                  <p>{regMessage}</p>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 14 }}>
+                    <span className="status-pill pending_approval">PENDING FLIGHT CLEARANCE</span>
+                    <button
+                      type="button"
+                      className="role-preset-btn"
+                      style={{ marginLeft: 'auto', background: '#0d9488', color: '#fff', border: 'none' }}
+                      onClick={() => {
+                        setAuthMode('signin');
+                        setUsernameInput(regUsername);
+                        setPasswordInput(regPassword);
+                        setRegSuccess(false);
+                      }}
+                    >
+                      Return to Sign In →
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={registerAstronaut}>
+                  <label>
+                    Full Name
+                    <input
+                      name="fullName"
+                      placeholder="e.g. Dr. Alexander Vance"
+                      value={regFullName}
+                      onChange={(e) => setRegFullName(e.target.value)}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Desired Username
+                    <input
+                      name="regUsername"
+                      placeholder="e.g. alex"
+                      value={regUsername}
+                      onChange={(e) => setRegUsername(e.target.value)}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Password
+                    <input
+                      name="regPassword"
+                      type="password"
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      required
+                    />
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <label>
+                      Mission Call Sign
+                      <input
+                        placeholder="e.g. ARES-9"
+                        value={regCallSign}
+                        onChange={(e) => setRegCallSign(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Mission
+                      <input
+                        placeholder="e.g. Asteria-7"
+                        value={regMission}
+                        onChange={(e) => setRegMission(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <label>
+                    Flight Specialization
+                    <select
+                      value={regSpecialization}
+                      onChange={(e) => setRegSpecialization(e.target.value)}
+                      style={{
+                        padding: '9px 10px',
+                        borderRadius: 6,
+                        border: '1px solid var(--border-input)',
+                        background: 'var(--bg-panel)',
+                        color: 'var(--text-main)',
+                        font: '500 12.5px sans-serif',
+                      }}
+                    >
+                      <option value="Mission Specialist">Mission Specialist</option>
+                      <option value="EVA Lead & Systems Specialist">EVA Lead & Systems Specialist</option>
+                      <option value="Flight Engineer">Flight Engineer</option>
+                      <option value="Commander">Commander</option>
+                      <option value="Payload Specialist">Payload Specialist</option>
+                    </select>
+                  </label>
+
+                  <div style={{ font: '500 11px/1.4 sans-serif', color: 'var(--text-muted)', margin: '4px 0 10px' }}>
+                    ℹ️ Note: Submitted credentials remain in <b>Pending Approval</b> status until approved by the Medical Officer (Admin).
+                  </div>
+
+                  {regError && <p className="error">{regError}</p>}
+                  <button disabled={regBusy}>
+                    {regBusy ? 'Transmitting Application…' : 'Submit Astronaut Application'} <span>→</span>
+                  </button>
+                </form>
+              )}
+            </>
+          )}
+
+          <div className="credentials" style={{ marginTop: 14 }}>
             Demo Credentials · Password <b>orbitcare-demo</b>
           </div>
           <div className="login-foot">
@@ -1103,6 +1569,7 @@ export default function App() {
             [Clock3, 'Mission timeline'],
             [FileText, 'Medical records'],
             [MessageCircle, 'AI assistant'],
+            ...(isAdmin ? [[UserCheck, 'Crew accounts']] : []),
           ].map(([Icon, label]: any) => (
             <button
               className={tab === label ? 'nav active' : 'nav'}
@@ -1111,6 +1578,9 @@ export default function App() {
             >
               <Icon size={18} />
               <span>{label}</span>
+              {label === 'Crew accounts' && pendingApplicantsCount > 0 && (
+                <span className="nav-badge">{pendingApplicantsCount}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -2238,30 +2708,210 @@ export default function App() {
               <div className="heading-row">
                 <div>
                   <div className="eyebrow">
-                    CLINICAL REPOSITORY & LAB REPORTS <span className="sep">·</span>{' '}
-                    {isAdmin ? `CREW MEMBER: ${astronaut?.name}` : 'MEDICAL FILES'}
+                    CLINICAL REPOSITORY & COUNTERMEASURES <span className="sep">·</span>{' '}
+                    {isAdmin ? `CREW MEMBER: ${astronaut?.name}` : 'MY MEDICAL RECORDS'}
                   </div>
-                  <h1>Medical Records</h1>
+                  <h1>Medical Records & Clinical Evaluations</h1>
                   <p className="muted">
                     {isAdmin
-                      ? `Clinical documents, PDF report extraction, and flight surgeon verification for ${astronaut?.name}.`
-                      : 'In-flight medical summaries and verified clinical documents.'}
+                      ? `Longitudinal clinical evaluations, countermeasure protocols, and certified medical reports for ${astronaut?.name}.`
+                      : 'Your certified flight medical history, physician evaluations, and prescribed microgravity countermeasures.'}
                   </p>
                 </div>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className="btn-approve"
+                    style={{ width: 'auto', padding: '9px 16px', display: 'inline-flex', gap: 6 }}
+                    onClick={() => setShowAddMedRecordModal(!showAddMedRecordModal)}
+                  >
+                    <FilePlus size={15} />
+                    {showAddMedRecordModal ? 'Close Form' : '+ Add Clinical Evaluation'}
+                  </button>
+                )}
               </div>
 
+              {/* ADMIN: ADD CLINICAL EVALUATION FORM */}
+              {isAdmin && showAddMedRecordModal && (
+                <section className="panel" style={{ borderLeft: '4px solid #0d9488', marginBottom: 20 }}>
+                  <div className="panel-head">
+                    <div>
+                      <div className="eyebrow">NEW CLINICAL ENTRY</div>
+                      <h2>Record Clinical Evaluation · {astronaut?.name}</h2>
+                      <p className="muted">
+                        This evaluation and prescribed countermeasure will be stored persistently in the database and synced to the cloud.
+                      </p>
+                    </div>
+                  </div>
+
+                  <form className="direct-create-box" onSubmit={handleAddMedicalRecord} style={{ marginTop: 10 }}>
+                    <div className="direct-create-grid">
+                      <label>
+                        Evaluation Type
+                        <select
+                          value={newMedRecord.record_type}
+                          onChange={(e) => setNewMedRecord({ ...newMedRecord, record_type: e.target.value })}
+                        >
+                          <option value="Clinical Evaluation">Clinical Evaluation</option>
+                          <option value="Countermeasure Prescription">Countermeasure Prescription</option>
+                          <option value="EVA Medical Clearance">EVA Medical Clearance</option>
+                          <option value="Radiation Dosimetry">Radiation Dosimetry</option>
+                          <option value="Neurovestibular Check">Neurovestibular Check</option>
+                        </select>
+                      </label>
+                      <label>
+                        Record Title
+                        <input
+                          placeholder="e.g. Day 60 Post-EVA Orthostatic & Cardiovascular Assessment"
+                          value={newMedRecord.title}
+                          onChange={(e) => setNewMedRecord({ ...newMedRecord, title: e.target.value })}
+                          required
+                        />
+                      </label>
+                      <label>
+                        Physician / Flight Surgeon
+                        <input
+                          placeholder="e.g. Dr. Robert Vance, Flight Surgeon"
+                          value={newMedRecord.physician}
+                          onChange={(e) => setNewMedRecord({ ...newMedRecord, physician: e.target.value })}
+                          required
+                        />
+                      </label>
+                      <label>
+                        Evaluation Date
+                        <input
+                          type="date"
+                          value={newMedRecord.date}
+                          onChange={(e) => setNewMedRecord({ ...newMedRecord, date: e.target.value })}
+                        />
+                      </label>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14 }}>
+                      <label style={{ font: '600 11px sans-serif', color: 'var(--text-muted)' }}>
+                        Clinical Observations & Diagnostic Findings
+                        <textarea
+                          rows={3}
+                          placeholder="Enter physical observations, ECG review, orthostatic response, or clinical findings..."
+                          value={newMedRecord.findings}
+                          onChange={(e) => setNewMedRecord({ ...newMedRecord, findings: e.target.value })}
+                          required
+                          style={{
+                            width: '100%',
+                            marginTop: 4,
+                            padding: 10,
+                            borderRadius: 6,
+                            border: '1px solid var(--border-input)',
+                            background: 'var(--bg-panel)',
+                            color: 'var(--text-main)',
+                            font: '400 12.5px sans-serif',
+                          }}
+                        />
+                      </label>
+
+                      <label style={{ font: '600 11px sans-serif', color: 'var(--text-muted)' }}>
+                        Prescribed Countermeasures & Protocols (Optional)
+                        <textarea
+                          rows={2}
+                          placeholder="e.g. Lower body negative pressure (LBNP) 20 min/day, 1.2L oral electrolyte fluid loading..."
+                          value={newMedRecord.countermeasures}
+                          onChange={(e) => setNewMedRecord({ ...newMedRecord, countermeasures: e.target.value })}
+                          style={{
+                            width: '100%',
+                            marginTop: 4,
+                            padding: 10,
+                            borderRadius: 6,
+                            border: '1px solid var(--border-input)',
+                            background: 'var(--bg-panel)',
+                            color: 'var(--text-main)',
+                            font: '400 12.5px sans-serif',
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button type="submit" disabled={medRecordSubmitting} className="btn-approve" style={{ width: 'auto', padding: '9px 18px' }}>
+                        <Check size={14} /> {medRecordSubmitting ? 'Saving to Database…' : 'Save Medical Record'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-decline"
+                        onClick={() => setShowAddMedRecordModal(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+
+              {/* CLINICAL MEDICAL RECORDS LIST */}
+              <section className="panel" style={{ marginBottom: 20 }}>
+                <div className="panel-head">
+                  <div>
+                    <div className="eyebrow">MISSION MEDICAL DATABASE</div>
+                    <h2>Clinical Evaluations & Countermeasure Protocols ({medicalRecords.length})</h2>
+                    <p className="muted">
+                      Stored in primary database & synchronized with Firebase Cloud in real time.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="med-records-list" style={{ marginTop: 12 }}>
+                  {medicalRecords.map((r: Any) => (
+                    <div className="med-record-card" key={r.id || r.title}>
+                      <div className="med-record-top">
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span className="status-pill approved">{r.record_type || 'Clinical Evaluation'}</span>
+                            <span className="status-pill" style={{ background: 'var(--bg-subtle)', color: 'var(--text-muted)' }}>
+                              {r.date || '2026-11-14'}
+                            </span>
+                          </div>
+                          <h3 className="med-record-title">{r.title}</h3>
+                          <div className="med-record-physician">
+                            <Stethoscope size={13} style={{ display: 'inline', marginRight: 4 }} />
+                            Signed by: <b>{r.physician || 'Flight Surgeon'}</b>
+                          </div>
+                        </div>
+                        <span className="status-pill approved">{r.status || 'Signed & Verified'}</span>
+                      </div>
+
+                      <div className="med-record-findings">
+                        <b>Clinical Findings:</b> {r.findings}
+                      </div>
+
+                      {r.countermeasures && (
+                        <div className="med-countermeasure-callout">
+                          <Activity size={15} color="#0d9488" style={{ flexShrink: 0, marginTop: 2 }} />
+                          <div>
+                            <strong>Prescribed Countermeasure:</strong> {r.countermeasures}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {medicalRecords.length === 0 && (
+                    <div className="empty">No clinical evaluations on record for this astronaut.</div>
+                  )}
+                </div>
+              </section>
+
+              {/* DOCUMENT INTELLIGENCE (PDF UPLOAD & OCR OBSERVATIONS) */}
               <section className="panel table-panel">
                 <div className="panel-head">
                   <div>
                     <div className="eyebrow">DOCUMENT INTELLIGENCE</div>
                     <h2>
                       {isAdmin
-                        ? `Medical reports · ${astronaut?.name}`
-                        : 'My medical reports'}
+                        ? `Lab & diagnostic reports · ${astronaut?.name}`
+                        : 'My diagnostic lab reports'}
                     </h2>
                     <p className="muted">
                       {isAdmin
-                        ? 'Upload clinical PDFs and verify extracted text for crew medical files.'
+                        ? 'Upload diagnostic laboratory PDFs and verify extracted text for crew medical files.'
                         : 'Extracted clinical text remains unverified until reviewed by a medical officer.'}
                     </p>
                   </div>
@@ -2322,6 +2972,240 @@ export default function App() {
                 )}
               </section>
             </>
+          )}
+
+          {/* CREW ACCOUNTS & APPROVALS TAB CONTENT (ADMIN ONLY) */}
+          {tab === 'Crew accounts' && isAdmin && (
+            <div className="crew-accounts-container">
+              <div className="heading-row">
+                <div>
+                  <div className="eyebrow">
+                    MISSION CONTROL ADMINISTRATION <span className="sep">·</span> CREW MANAGEMENT
+                  </div>
+                  <h1>Astronaut Accounts & Flight Clearances</h1>
+                  <p className="muted">
+                    Authorize pending astronaut applications, manage mission roster access, or provision new crew member credentials.
+                  </p>
+                </div>
+              </div>
+
+              {/* SECTION 1: PENDING APPROVALS */}
+              <section className="panel">
+                <div className="panel-head">
+                  <div>
+                    <div className="eyebrow" style={{ color: '#d97706' }}>ACTION REQUIRED</div>
+                    <h2>Pending Flight Clearance Applications ({pendingUsers.length})</h2>
+                    <p className="muted">
+                      Astronauts who have requested flight access and are awaiting Flight Surgeon medical signoff.
+                    </p>
+                  </div>
+                </div>
+
+                {pendingUsers.length === 0 ? (
+                  <div className="empty" style={{ padding: '24px 0' }}>
+                    <CheckCircle2 size={24} color="#0d9488" style={{ marginBottom: 8 }} />
+                    <p>All registered crew members have been evaluated and authorized. No applications pending.</p>
+                  </div>
+                ) : (
+                  <div className="approval-grid">
+                    {pendingUsers.map((u: Any) => (
+                      <div className="applicant-card" key={u.id || u.username}>
+                        <div>
+                          <div className="applicant-card-header">
+                            <div>
+                              <div className="applicant-name">{u.full_name || u.name || u.username}</div>
+                              <div style={{ font: '600 11px monospace', color: 'var(--text-muted)' }}>@{u.username}</div>
+                            </div>
+                            <span className="status-pill pending_approval">PENDING APPROVAL</span>
+                          </div>
+                          <div className="applicant-meta">
+                            <span><Users size={12} /> Call Sign: <b>{u.call_sign || 'Unassigned'}</b></span>
+                            <span><Clock3 size={12} /> Mission: <b>{u.mission || 'Asteria-7'}</b></span>
+                            <span><BadgeCheck size={12} /> Role: <b>{u.specialization || 'Flight Crew'}</b></span>
+                          </div>
+                        </div>
+                        <div className="applicant-actions">
+                          <button
+                            type="button"
+                            className="btn-approve"
+                            disabled={adminActionBusy}
+                            onClick={() => handleApproveUser(u)}
+                          >
+                            <Check size={14} /> Approve & Enlist
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-decline"
+                            disabled={adminActionBusy}
+                            onClick={() => handleRejectUser(u)}
+                          >
+                            <XCircle size={14} /> Decline
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* SECTION 2: DIRECT CREW ONBOARDING (ADMIN ONLY) */}
+              <section className="panel">
+                <div className="panel-head">
+                  <div>
+                    <div className="eyebrow">ADMIN PRIVILEGE</div>
+                    <h2>Direct Astronaut Provisioning</h2>
+                    <p className="muted">
+                      Immediately enlist and clear a new astronaut for flight duty without pending verification.
+                    </p>
+                  </div>
+                </div>
+
+                <form className="direct-create-box" onSubmit={handleDirectCreateAstronaut}>
+                  <div className="direct-create-grid">
+                    <label>
+                      Astronaut Full Name
+                      <input
+                        placeholder="e.g. Dr. Jordan Lee"
+                        value={directName}
+                        onChange={(e) => setDirectName(e.target.value)}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Username
+                      <input
+                        placeholder="e.g. jordan"
+                        value={directUsername}
+                        onChange={(e) => setDirectUsername(e.target.value)}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Password
+                      <input
+                        type="password"
+                        value={directPassword}
+                        onChange={(e) => setDirectPassword(e.target.value)}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Call Sign
+                      <input
+                        placeholder="e.g. TITAN-5"
+                        value={directCallSign}
+                        onChange={(e) => setDirectCallSign(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Mission
+                      <input
+                        placeholder="e.g. Asteria-7"
+                        value={directMission}
+                        onChange={(e) => setDirectMission(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Specialization
+                      <select
+                        value={directSpecialization}
+                        onChange={(e) => setDirectSpecialization(e.target.value)}
+                      >
+                        <option value="Mission Specialist">Mission Specialist</option>
+                        <option value="Flight Engineer">Flight Engineer</option>
+                        <option value="Commander">Commander</option>
+                        <option value="EVA Lead">EVA Lead</option>
+                        <option value="Payload Specialist">Payload Specialist</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  {directError && <p className="error">{directError}</p>}
+                  {directSuccess && <p style={{ color: '#0d9488', font: '600 12px sans-serif', marginBottom: 10 }}>{directSuccess}</p>}
+
+                  <button type="submit" disabled={directBusy} className="btn-approve" style={{ width: 'auto', padding: '9px 18px' }}>
+                    <Plus size={14} /> Provision & Clear Astronaut
+                  </button>
+                </form>
+              </section>
+
+              {/* SECTION 3: CREW ROSTER & REGISTRY TABLE */}
+              <section className="panel table-panel">
+                <div className="panel-head">
+                  <div>
+                    <div className="eyebrow">SYSTEM REGISTRY</div>
+                    <h2>Mission Flight Roster & User Accounts</h2>
+                    <p className="muted">
+                      Complete registry of authenticated flight crew, medical directors, and clearance statuses.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="roster-table">
+                    <thead>
+                      <tr>
+                        <th>CREW MEMBER</th>
+                        <th>USERNAME</th>
+                        <th>ROLE</th>
+                        <th>CALL SIGN</th>
+                        <th>MISSION</th>
+                        <th>CLEARANCE STATUS</th>
+                        <th>ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {systemUsers.map((u: Any) => (
+                        <tr key={u.id || u.username}>
+                          <td>
+                            <div className="roster-user-cell">
+                              <div className="roster-avatar">
+                                {(u.call_sign || u.name || u.username || 'CR').slice(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <b>{u.full_name || u.name || u.username}</b>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{u.specialization || 'Flight Crew'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td><code>@{u.username}</code></td>
+                          <td>
+                            <span className={`role-pill ${u.role === 'medical' ? 'admin' : 'user'}`}>
+                              {u.role === 'medical' ? 'Admin / Surgeon' : 'Astronaut'}
+                            </span>
+                          </td>
+                          <td><b>{u.call_sign || '—'}</b></td>
+                          <td>{u.mission || 'Asteria-7'}</td>
+                          <td>
+                            <span className={`status-pill ${u.status || 'approved'}`}>
+                              {u.status || 'approved'}
+                            </span>
+                          </td>
+                          <td>
+                            {u.status === 'pending_approval' && (
+                              <button
+                                type="button"
+                                className="btn-approve"
+                                style={{ padding: '4px 8px', fontSize: 11 }}
+                                onClick={() => handleApproveUser(u)}
+                              >
+                                Approve
+                              </button>
+                            )}
+                            {u.status === 'approved' && u.role !== 'medical' && (
+                              <span style={{ color: '#0d9488', fontSize: 11, fontWeight: 600 }}>Active Crew</span>
+                            )}
+                            {u.role === 'medical' && (
+                              <span style={{ color: '#d97706', fontSize: 11, fontWeight: 600 }}>Flight Surgeon</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
           )}
 
           {/* AI ASSISTANT TAB CONTENT */}
