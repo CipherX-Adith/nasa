@@ -747,7 +747,7 @@ export default function App() {
         <section className="login-card">
           <div className="brand">
             <div>
-              <img className="brand-logo" src="/orbitcare-logo.png" alt="ORBITCARE AI" />
+              <img className="brand-logo" src="/orbitcare-logo.svg" alt="ORBITCARE" />
               <small>MISSION HEALTH INTELLIGENCE</small>
             </div>
           </div>
@@ -868,7 +868,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">
           <div>
-            <img className="brand-logo" src="/orbitcare-logo.png" alt="ORBITCARE AI" />
+            <img className="brand-logo" src="/orbitcare-logo.svg" alt="ORBITCARE" />
             <small>{isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'}</small>
           </div>
         </div>
