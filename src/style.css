@@ -5820,6 +5820,298 @@ textarea {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 }
 
+/* Full-screen OrbitCare authentication landing page */
+.login {
+  min-height: 100svh;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+[data-theme="dark"] .login {
+  background: #071522;
+}
+
+.login-card {
+  width: min(384px, calc(100% - 48px));
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: 28px 0 22px;
+  display: flex;
+  flex-direction: column;
+}
+
+.login-card .brand {
+  margin: 0 0 62px;
+}
+
+.login-card .brand-logo {
+  width: 220px;
+  height: auto;
+}
+
+.login-card .brand small {
+  margin-top: 10px;
+  color: #46789d;
+  font-size: 10px;
+  letter-spacing: .13em;
+}
+
+[data-theme="dark"] .login-card .brand small {
+  color: #7cb7de;
+}
+
+.login-card .eyebrow {
+  margin-bottom: 12px;
+  font-size: 10px;
+  letter-spacing: .12em;
+  color: #477b9f;
+}
+
+[data-theme="dark"] .login-card .eyebrow {
+  color: #67b6e6;
+}
+
+.login-card h1 {
+  margin-bottom: 14px;
+  font-size: 34px;
+  line-height: 1.12;
+}
+
+.login-card > .muted {
+  max-width: 382px;
+  margin-bottom: 4px;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+[data-theme="dark"] .login-card > .muted {
+  color: #87b8dc;
+}
+
+.theme-toggle-floating {
+  top: 19px;
+  right: 22px;
+  padding: 6px 11px;
+  border-radius: 7px;
+  font-size: 11px;
+  box-shadow: none;
+}
+
+[data-theme="dark"] .theme-toggle-floating {
+  background: rgba(20, 42, 55, .78);
+  border-color: #294454;
+  color: #eff9ff;
+}
+
+.auth-tabs {
+  margin: 0 0 25px;
+  padding: 3px;
+  border-color: #dce7ef;
+  border-radius: 8px;
+}
+
+[data-theme="dark"] .auth-tabs {
+  background: #132a38;
+  border-color: #254151;
+}
+
+.auth-tab-btn {
+  min-height: 43px;
+  padding: 7px 10px;
+  color: #5e7890;
+  font-size: 11px;
+}
+
+[data-theme="dark"] .auth-tab-btn {
+  color: #7ea8c6;
+}
+
+[data-theme="dark"] .auth-tab-btn.active {
+  background: #0c1d2a;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.login form {
+  gap: 13px;
+  margin-top: 0;
+}
+
+.login form label {
+  gap: 7px;
+  font-size: 10px;
+  color: #52728b;
+}
+
+[data-theme="dark"] .login form label {
+  color: #73a5c8;
+}
+
+.login form input {
+  height: 41px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+[data-theme="dark"] .login form input {
+  background: #091925;
+  border-color: #294354;
+  color: #f3fbff;
+}
+
+.login form > button {
+  min-height: 45px;
+  margin-top: 1px;
+  padding: 11px 13px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #20bba9, #63d3c2);
+  color: #06202a;
+  font-size: 13px;
+}
+
+.login form > button:hover:not(:disabled) {
+  background: linear-gradient(90deg, #2dcab7, #75dfcf);
+}
+
+.login-quick-accounts {
+  margin-top: 25px;
+  padding-top: 17px;
+  border-color: #dae4ea;
+}
+
+[data-theme="dark"] .login-quick-accounts {
+  border-color: #203847;
+}
+
+.login-quick-title {
+  margin-bottom: 10px;
+  font-size: 10px;
+  color: #5f7f96;
+}
+
+[data-theme="dark"] .login-quick-title {
+  color: #82b9df;
+}
+
+.login-quick-pills {
+  gap: 7px;
+}
+
+.quick-account-pill {
+  min-height: 38px;
+  gap: 5px;
+  padding: 6px 9px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+[data-theme="dark"] .quick-account-pill {
+  background: #0c1d2a;
+  border-color: #203948;
+  color: #eef7fc;
+}
+
+[data-theme="dark"] .quick-account-pill:hover,
+[data-theme="dark"] .quick-account-pill.active {
+  background: #102735;
+  border-color: #1694b2;
+  color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(22, 148, 178, .25);
+}
+
+[data-theme="dark"] .quick-account-pill.admin:hover,
+[data-theme="dark"] .quick-account-pill.admin.active {
+  background: #202518;
+  border-color: #ef9f00;
+  color: #fff4d2;
+  box-shadow: 0 0 0 1px rgba(239, 159, 0, .4);
+}
+
+.pill-tag {
+  padding: 2px 5px;
+  font-size: 9px;
+}
+
+[data-theme="dark"] .pill-tag {
+  background: #153044;
+  color: #55d9d1;
+}
+
+.login-foot {
+  margin-top: auto;
+  padding-top: 15px;
+  border-color: #dae4ea;
+  font-size: 10px;
+}
+
+[data-theme="dark"] .login-foot {
+  color: #6da7ca;
+  border-color: #203847;
+}
+
+.login-art {
+  padding: 8.8%;
+  background: radial-gradient(ellipse at 58% 42%, #d8f5ee 0, #e7f6ff 36%, #f7fbfe 72%, #f8fafc 100%);
+}
+
+[data-theme="dark"] .login-art {
+  background: radial-gradient(ellipse at 58% 42%, #0d4d50 0, #082c3b 31%, #071c2a 66%, #061724 100%);
+}
+
+.orbit {
+  border-color: rgba(42, 148, 160, .23);
+}
+
+[data-theme="dark"] .orbit {
+  border-color: rgba(72, 172, 174, .22);
+}
+
+.planet {
+  width: 202px;
+  height: 202px;
+  left: 42%;
+  top: 27%;
+}
+
+.art-copy span {
+  font-size: 10px;
+  color: #0d9488;
+}
+
+[data-theme="dark"] .art-copy span {
+  color: #41e1d2;
+}
+
+.art-copy h2 {
+  font-size: 31px;
+  color: #06111e;
+}
+
+[data-theme="dark"] .art-copy h2 {
+  color: #ffffff;
+}
+
+.art-copy p {
+  font-size: 11px;
+}
+
+[data-theme="dark"] .art-copy p {
+  color: #79add0;
+}
+
+@media (max-width: 768px) {
+  .login-card {
+    min-height: 100svh;
+    padding-top: 28px;
+  }
+
+  .login-card .brand {
+    margin-bottom: 46px;
+  }
+}
+
 /* Reference-inspired anatomy and live system summary */
 .digital-twin-badge {
   margin-bottom: 5px;

@@ -81,7 +81,7 @@ const fmt = (s: string) =>
 export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
-    return saved === 'dark' || saved === 'light' ? saved : 'light';
+    return saved === 'dark' || saved === 'light' ? saved : 'dark';
   });
 
   useEffect(() => {
