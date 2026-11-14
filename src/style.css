@@ -1657,6 +1657,31 @@ select option {
   margin-top: 14px;
 }
 
+.telemetry-point-intro {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: telemetry-point-arrival 260ms cubic-bezier(.16, 1, .3, 1) forwards;
+}
+
+@keyframes telemetry-point-arrival {
+  from {
+    opacity: 0;
+    transform: scale(0.15);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .telemetry-point-intro {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 .telemetry-footer {
   display: flex;
   justify-content: space-between;
@@ -3575,6 +3600,33 @@ td {
   transform: translateY(-2px);
 }
 
+.btn-download-report {
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid var(--primary-border);
+  border-radius: 9999px;
+  background: var(--bg-card);
+  color: var(--primary-accent);
+  font: 700 12px 'DM Sans', sans-serif;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color .18s ease, background-color .18s ease, transform .18s ease;
+}
+
+.btn-download-report:hover:not(:disabled) {
+  background: var(--primary-bg);
+  border-color: var(--primary-accent);
+  transform: translateY(-1px);
+}
+
+.btn-download-report:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
 /* -------------------------------------------------------------
    DAILY CLINICAL HEALTH REPORT MODAL
    ------------------------------------------------------------- */
@@ -4410,6 +4462,44 @@ textarea {
   color: var(--text-muted);
   font: 400 11.5px/1.55 'DM Mono', monospace;
 }
+
+/* Evidence assistant workspace */
+.assistant-workspace { max-width: 1320px; }
+.assistant-page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:18px; }
+.assistant-page-head h1 { margin:3px 0 7px; font:800 30px/1.15 'Manrope',sans-serif; color:var(--text-heading); letter-spacing:-.03em; }
+.assistant-report-btn { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--primary-border); border-radius:9px; padding:9px 13px; background:var(--bg-card); color:var(--primary-accent); font:700 12px 'DM Sans',sans-serif; cursor:pointer; }
+.assistant-context-bar { display:flex; align-items:center; gap:8px; min-height:48px; padding:8px 12px; margin-bottom:16px; border:1px solid var(--border-panel); border-radius:12px; background:var(--bg-card); color:var(--text-muted); font-size:12px; }
+.assistant-context-bar strong { color:var(--text-heading); font:700 13px 'Manrope',sans-serif; }
+.assistant-context-bar b { color:var(--primary-accent); font:700 11px 'DM Mono',monospace; }
+.assistant-crew-avatar { width:29px; height:29px; display:grid; place-items:center; border-radius:50%; background:var(--primary-bg); border:1px solid var(--primary-border); color:var(--primary-accent); font:700 10px 'DM Mono',monospace; }
+.assistant-context-status { margin-left:auto; display:inline-flex; align-items:center; gap:6px; color:var(--text-muted); font-size:11px; }
+.assistant-context-status i { width:7px; height:7px; border-radius:50%; background:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.12); }
+.assistant-layout { display:grid; grid-template-columns:minmax(0,1fr) 270px; gap:16px; align-items:start; }
+.assistant-chat-card,.assistant-insights { border:1px solid var(--border-panel); border-radius:16px; background:var(--bg-card); box-shadow:var(--shadow-panel); }
+.assistant-chat-card { padding:22px; }
+.assistant-chat-title { display:flex; align-items:center; gap:12px; }
+.assistant-chat-title h2 { margin:0 0 3px; font:700 18px 'Manrope',sans-serif; color:var(--text-heading); }
+.assistant-chat-title p { margin:0; color:var(--text-muted); font-size:12px; }
+.assistant-suggestions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin:20px 0 10px; }
+.assistant-suggestions>span { color:var(--text-muted); font:600 11px 'DM Mono',monospace; text-transform:uppercase; letter-spacing:.06em; }
+.assistant-suggestions button { border:1px solid var(--border-input); border-radius:999px; padding:6px 10px; background:var(--bg-subtle); color:var(--text-muted); font:600 11px 'DM Sans',sans-serif; cursor:pointer; }
+.assistant-suggestions button:hover { color:var(--primary-accent); border-color:var(--primary-border); background:var(--primary-bg); }
+.assistant-composer { position:relative; }
+.assistant-composer textarea { width:100%; height:112px; padding:14px 128px 14px 14px; resize:vertical; border-radius:10px; background:var(--bg-box); }
+.assistant-send-btn { position:absolute; right:10px; bottom:10px; border:0; border-radius:8px; padding:9px 13px; background:var(--primary); color:var(--primary-text); font:700 12px 'DM Sans',sans-serif; cursor:pointer; }
+.assistant-send-btn:disabled { opacity:.55; cursor:not-allowed; }
+.assistant-shortcut { display:block; margin-top:7px; font-size:10.5px; }
+.assistant-insights { padding:16px; }
+.assistant-insights-head { display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; border-bottom:1px solid var(--border-subtle); }
+.assistant-insights-head span { color:var(--primary-accent); font:700 10px 'DM Mono',monospace; letter-spacing:.08em; }
+.assistant-insights-head small { color:var(--text-muted); font-size:10px; }
+.assistant-insight-row { display:flex; gap:9px; padding:13px 0; border-bottom:1px solid var(--border-subtle); color:var(--primary-accent); }
+.assistant-insight-row div { display:flex; flex-direction:column; gap:2px; }
+.assistant-insight-row b { color:var(--text-heading); font:700 12px 'Manrope',sans-serif; }
+.assistant-insight-row span { color:var(--text-muted); font-size:11px; line-height:1.35; }
+.assistant-insight-action { width:100%; margin-top:13px; border:0; background:transparent; color:var(--primary-accent); font:700 11px 'DM Sans',sans-serif; text-align:left; cursor:pointer; }
+@media (max-width: 980px) { .assistant-layout { grid-template-columns:1fr; } .assistant-insights { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; } .assistant-insights-head,.assistant-insight-action { grid-column:span 3; } .assistant-insight-row { border:0; padding:4px; } }
+@media (max-width: 620px) { .assistant-page-head { flex-direction:column; } .assistant-context-status { display:none; } .assistant-composer textarea { padding-right:14px; padding-bottom:52px; } .assistant-insights { grid-template-columns:1fr; } .assistant-insights-head,.assistant-insight-action { grid-column:span 1; } }
 
 /* ==========================================================================
    LIQUID GLASS THEME & DIGITAL TWIN ANATOMICAL SYSTEM

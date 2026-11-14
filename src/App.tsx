@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock3,
+  Download,
   FilePlus,
   FileText,
   Heart,
@@ -202,6 +203,7 @@ export default function App() {
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
   const [dailyReportData, setDailyReportData] = useState<Any | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [reportSavedSuccess, setReportSavedSuccess] = useState(false);
 
   const [usernameInput, setUsernameInput] = useState('medical');
@@ -1128,20 +1130,21 @@ export default function App() {
     };
   }, [measurements, backendMetric, selectedMetric]);
 
-  // Custom dot to render distinct red circular markers with dark border on drift points
+  // Points intentionally arrive before the line, giving metric changes a clear
+  // scan-in sequence instead of an abrupt chart swap.
   const CustomDot = (props: any) => {
-    const { cx, cy, payload } = props;
-    if (!payload || !payload.isDrift || cx === undefined || cy === undefined) {
-      return null;
-    }
+    const { cx, cy, payload, index = 0 } = props;
+    if (!payload || cx === undefined || cy === undefined) return null;
     return (
       <circle
         cx={cx}
         cy={cy}
-        r={4.5}
-        fill="#ef4444"
-        stroke="#1e222d"
-        strokeWidth={1.5}
+        r={payload.isDrift ? 4.5 : 3.2}
+        fill={payload.isDrift ? '#ef4444' : '#0077ff'}
+        stroke="#ffffff"
+        strokeWidth={payload.isDrift ? 1.5 : 1}
+        className="telemetry-point-intro"
+        style={{ animationDelay: `${Math.min(index * 42, 560)}ms` }}
       />
     );
   };
@@ -1209,20 +1212,24 @@ export default function App() {
 
   // Custom Hourly Dot: solid marker
   const CustomHourlyDot = (props: any) => {
-    const { cx, cy, payload } = props;
+    const { cx, cy, payload, index = 0 } = props;
     if (!payload || cx === undefined || cy === undefined) return null;
+    const shared = {
+      className: 'telemetry-point-intro',
+      style: { animationDelay: `${Math.min(index * 42, 560)}ms` },
+    };
     if (payload.is_current) {
       return (
-        <circle cx={cx} cy={cy} r={5} fill="#0066ff" stroke="#ffffff" strokeWidth={2.5} />
+        <circle cx={cx} cy={cy} r={5} fill="#0066ff" stroke="#ffffff" strokeWidth={2.5} {...shared} />
       );
     }
     if (payload.isDrift) {
       return (
-        <circle cx={cx} cy={cy} r={4.5} fill="#ff0055" stroke="#ffffff" strokeWidth={1.5} />
+        <circle cx={cx} cy={cy} r={4.5} fill="#ff0055" stroke="#ffffff" strokeWidth={1.5} {...shared} />
       );
     }
     return (
-      <circle cx={cx} cy={cy} r={3} fill="#0066ff" stroke="#ffffff" strokeWidth={1} />
+      <circle cx={cx} cy={cy} r={3} fill="#0066ff" stroke="#ffffff" strokeWidth={1} {...shared} />
     );
   };
 
@@ -1457,6 +1464,65 @@ export default function App() {
       setError(`Could not save summary: ${e.message || 'backend unavailable'}`);
     } finally {
       setIsGeneratingReport(false);
+    }
+  };
+
+  const handleDownloadAstronautReport = async (aid?: number) => {
+    const targetId = aid || selected || astronaut?.id || astronauts[0]?.id || 1;
+    setIsDownloadingReport(true);
+    try {
+      const report = await api(`/astronauts/${targetId}/reports/daily?day=42`);
+      const evidence = (report.evidence || []).map((item: Any) =>
+        `- ${item.metric}: ${item.value} ${item.unit || ''} | Baseline: ${item.baseline_available ? `${item.baseline} ${item.unit || ''} (n=${item.baseline_count})` : 'unavailable'} | Source: ${item.source || 'not recorded'}`
+      ).join('\n');
+      const domains = (Object.values(report.domain_assessments || {}) as Any[]).map((domain: Any) =>
+        `${domain.title || 'Monitoring domain'}\n${(domain.findings || []).map((finding: string) => `  - ${finding}`).join('\n')}`
+      ).join('\n\n');
+      const deviations = (report.abnormal_behaviours || []).map((item: Any) =>
+        `- [${item.severity || 'REVIEW'}] ${item.title}: ${item.detail}`
+      ).join('\n') || 'None recorded.';
+      const content = [
+        'ORBITCARE — DAILY HEALTH DATA SUMMARY',
+        'Prototype monitoring report · For clinical evaluation by an authorized medical officer.',
+        '',
+        `Report ID: ${report.report_id || 'Not assigned'}`,
+        `Astronaut: ${report.astronaut_name || 'Unknown'} (${report.call_sign || 'No call sign'})`,
+        `Mission: ${report.mission || 'Not recorded'} · Mission day: ${report.mission_day || 42}`,
+        `Generated: ${report.date_str || new Date().toLocaleString()}`,
+        `Monitoring status: ${report.overall_status || 'NOMINAL'}`,
+        '',
+        'EXECUTIVE SUMMARY',
+        report.executive_summary || 'No summary available.',
+        '',
+        'SOURCE MEASUREMENTS AND SELF-REPORTS',
+        evidence || 'No measurements available.',
+        '',
+        'RECORDED OBSERVATIONS BY DOMAIN',
+        domains || 'No domain observations available.',
+        '',
+        'BASELINE DEVIATIONS FOR REVIEW',
+        deviations,
+        '',
+        'COUNTERMEASURES / FOLLOW-UP',
+        (report.countermeasures || []).map((item: string) => `- ${item}`).join('\n') || 'No countermeasures listed.',
+        '',
+        'This is a simulated prototype report. It does not diagnose, determine flight clearance, or replace clinician judgement.',
+      ].join('\n');
+      const filenamePart = String(report.astronaut_name || `astronaut-${targetId}`)
+        .trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const file = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(file);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `orbitcare-${filenamePart || 'astronaut'}-day-${String(report.mission_day || 42).padStart(3, '0')}-summary.txt`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(`Could not download the clinical summary: ${e.message || 'backend unavailable'}`);
+    } finally {
+      setIsDownloadingReport(false);
     }
   };
 
@@ -1758,6 +1824,7 @@ export default function App() {
     const activePoints = isHourly ? hourlyChartData.points : telemetryData.points;
     const activeDomain = isHourly ? hourlyChartData.domain : telemetryData.domain;
     const activeTicks = isHourly ? hourlyChartData.ticks : telemetryData.ticks;
+    const chartTransitionKey = `${telemetryMode}-${selectedMetric}-${selected || astronaut?.id || 1}-${activePoints.length}`;
 
     return (
       <section className="telemetry-card">
@@ -1809,6 +1876,7 @@ export default function App() {
         <div className="telemetry-chart-container">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
+              key={chartTransitionKey}
               data={activePoints}
               margin={{ top: 15, right: 25, left: 0, bottom: 5 }}
             >
@@ -1892,6 +1960,7 @@ export default function App() {
               />
 
               <Area
+                key={`area-${chartTransitionKey}`}
                 type="monotone"
                 dataKey="value"
                 stroke="#0077ff"
@@ -1899,6 +1968,10 @@ export default function App() {
                 fill="url(#telemetryFill)"
                 dot={isHourly ? <CustomHourlyDot /> : <CustomDot />}
                 activeDot={<CustomActiveDot />}
+                isAnimationActive
+                animationBegin={620}
+                animationDuration={720}
+                animationEasing="ease-out"
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -2148,7 +2221,114 @@ export default function App() {
           📋 Daily Clinical Report
         </button>
 
+        {isAdmin && (
+          <button
+            type="button"
+            className="btn-download-report"
+            onClick={() => handleDownloadAstronautReport(activeCrew.id)}
+            disabled={isDownloadingReport}
+            title="Download selected astronaut's daily health data summary"
+          >
+            <Download size={15} />
+            {isDownloadingReport ? 'Preparing…' : 'Download report'}
+          </button>
+        )}
+
         {extraControls}
+      </div>
+    );
+  };
+
+  const renderAssistantWorkspace = () => {
+    const activeCrew = astronaut || astronauts.find((a: Any) => a.id === selected) || astronauts[0];
+    const heartRate = latest('Resting heart rate') || latest('Heart Rate');
+    const heartBaseline = baseline('Resting heart rate') || baseline('Heart Rate');
+    const sleep = latest('Sleep duration');
+    const sleepBaseline = baseline('Sleep duration');
+    const openAlerts = alerts.filter((alert: Any) => !alert.acknowledged).length;
+    const baselineDelta = heartRate && heartBaseline?.available
+      ? Number(heartRate.value) - Number(heartBaseline.median)
+      : null;
+    const sleepDelta = sleep && sleepBaseline?.available
+      ? Number(sleep.value) - Number(sleepBaseline.median)
+      : null;
+    const suggestions = [
+      'Summarize recent health changes',
+      'What evidence supports the open alerts?',
+      'How has sleep changed from baseline?',
+      'Summarize medical records',
+    ];
+
+    return (
+      <div className="assistant-workspace">
+        <div className="assistant-page-head">
+          <div>
+            <div className="eyebrow">MISSION INTELLIGENCE</div>
+            <h1>Evidence-Grounded Assistant</h1>
+            <p className="muted">Ask questions grounded in recorded mission measurements, baselines, assessments, alerts, and records.</p>
+          </div>
+          <button type="button" className="assistant-report-btn" onClick={() => handleOpenDailyReport(activeCrew?.id)}>
+            <FileText size={15} /> Daily report
+          </button>
+        </div>
+
+        <div className="assistant-context-bar">
+          <span className="assistant-crew-avatar">{activeCrew?.call_sign?.slice(0, 2) || 'OR'}</span>
+          <strong>{activeCrew?.name || 'Selected astronaut'}</strong>
+          <span>·</span>
+          <b>{activeCrew?.call_sign || 'ORION-1'}</b>
+          <span className="assistant-context-status"><i /> {assistantStatus?.configured ? 'Record-grounded AI available' : 'Record-based assistant'}</span>
+        </div>
+
+        <div className="assistant-layout">
+          <section className="assistant-chat-card">
+            <div className="assistant-chat-title">
+              <div className="assistant-icon"><Atom size={21} /></div>
+              <div>
+                <h2>Ask about mission health</h2>
+                <p>{assistantStatus?.configured ? `Responses use ${assistantStatus.model} with retrieved records.` : 'Answers cite available mission records and observations.'}</p>
+              </div>
+            </div>
+            <form className="assistant-form" onSubmit={askAssistant}>
+              <div className="assistant-suggestions">
+                <span>Suggested</span>
+                {suggestions.map((item) => <button key={item} type="button" onClick={() => setQuestion(item)}>{item}</button>)}
+              </div>
+              <div className="assistant-composer">
+                <textarea
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); askAssistant(); } }}
+                  placeholder="Ask about mission health…"
+                  aria-label="Ask a question about mission health"
+                  disabled={busy || !selected}
+                />
+                <button className="assistant-send-btn" type="submit" disabled={!question.trim() || busy || !selected}>
+                  {busy ? 'Searching…' : 'Send'} <span>→</span>
+                </button>
+              </div>
+              <span className="assistant-shortcut">Ctrl + Enter to send</span>
+            </form>
+            {busy && <div className="assistant-loading" role="status"><span className="loading-dot" /> Searching the astronaut’s records and baselines…</div>}
+            {answer && assistantResult && (
+              <div className="assistant-result" aria-live="polite">
+                <div className="assistant-result-top"><span className="assistant-mode">{assistantResult.mode}</span><span>{assistantResult.sources?.length || 0} evidence sources</span></div>
+                {assistantResult.status_message && <p className="assistant-status-note">{assistantResult.status_message}</p>}
+                <pre className="assistant-response">{answer}</pre>
+                {assistantResult.sources?.length > 0 && <details className="assistant-evidence"><summary>View supporting records</summary><ul>{assistantResult.sources.map((source: Any) => <li key={source.id}><b>[{source.id}]</b> {source.label} <span>{source.type}{source.timestamp ? ` · ${new Date(source.timestamp).toLocaleString()}` : ''}</span></li>)}</ul><pre>{assistantResult.evidence}</pre></details>}
+              </div>
+            )}
+            <div className="notice"><ShieldCheck size={16} /> The assistant explains recorded evidence; it does not diagnose or determine flight clearance.</div>
+          </section>
+
+          <aside className="assistant-insights">
+            <div className="assistant-insights-head"><span>RECENT INSIGHTS</span><small>Available records</small></div>
+            <div className="assistant-insight-row"><HeartPulse size={17} /><div><b>Heart rate</b><span>{baselineDelta === null ? 'Baseline building' : `${Math.abs(baselineDelta).toFixed(0)} bpm ${baselineDelta > 0 ? 'above' : 'below'} baseline`}</span></div></div>
+            <div className="assistant-insight-row"><Wind size={17} /><div><b>Sleep</b><span>{sleepDelta === null ? 'Baseline building' : `${Math.abs(sleepDelta).toFixed(1)} h ${sleepDelta < 0 ? 'below' : 'above'} baseline`}</span></div></div>
+            <div className="assistant-insight-row"><AlertTriangle size={17} /><div><b>Open alerts</b><span>{openAlerts ? `${openAlerts} awaiting review` : 'No active alerts'}</span></div></div>
+            <button type="button" className="assistant-insight-action" onClick={() => setQuestion('What evidence supports the open alerts?')}>Review evidence →</button>
+          </aside>
+        </div>
       </div>
     );
   };
@@ -3700,98 +3880,7 @@ export default function App() {
 
           {/* AI ASSISTANT TAB CONTENT */}
           {tab === 'AI assistant' && (
-            <>
-              <div className="heading-row">
-                <div>
-                  <h1>Evidence-Grounded Assistant</h1>
-                  <p className="muted">
-                    Ask questions about this astronaut’s measurements, personal baselines, assessments, alerts, and records.
-                  </p>
-                </div>
-                {renderHeaderCrewControls()}
-              </div>
-
-              <section className="panel assistant">
-                <div className="assistant-head">
-                  <div className="assistant-icon">
-                    <Atom />
-                  </div>
-                  <div>
-                    <div className="eyebrow">
-                      {assistantStatus?.mode || 'ASSISTANT MODE UNKNOWN'} · {isAdmin ? 'MEDICAL OFFICER' : 'CREW'}
-                    </div>
-                    <h2>
-                      {isAdmin
-                        ? `Ask about ${astronaut?.name}'s health signals`
-                        : 'Ask about your mission health'}
-                    </h2>
-                    <p>{assistantStatus?.configured
-                      ? `Gemini (${assistantStatus.model}) is available. Replies use retrieved project records.`
-                      : assistantStatus ? 'Responses are generated from available local project records. Add a Gemini API key on the backend for live AI explanations.'
-                        : 'Assistant mode could not be checked. Verify the backend connection.'}</p>
-                  </div>
-                </div>
-                <form className="assistant-form" onSubmit={askAssistant}>
-                  <div className="prompt-chips">
-                    {[
-                      'Summarize recent health changes',
-                      'What evidence supports the open alerts?',
-                      'How has sleep changed from baseline?',
-                      'Summarize the last 7 days',
-                      'Summarize medical records',
-                      'Explain the mission timeline',
-                    ].map((x) => (
-                      <button key={x} type="button" onClick={() => setQuestion(x)}>
-                        {x}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    value={question}
-                    onChange={(e) => setQuestion(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); askAssistant(); } }}
-                    placeholder="Ask about available measurements, trends, alerts, or mission events…"
-                    aria-label="Ask a question about mission health"
-                    disabled={busy || !selected}
-                  />
-                  <div className="assistant-submit-row">
-                    <button
-                      className="ask-btn"
-                      type="submit"
-                      disabled={!question.trim() || busy || !selected}
-                    >
-                      {busy ? 'Retrieving evidence…' : 'Ask assistant'} <span>→</span>
-                    </button>
-                    <span className="assistant-shortcut">Press Ctrl + Enter to send</span>
-                  </div>
-                </form>
-                {busy && <div className="assistant-loading" role="status"><span className="loading-dot" /> Searching this astronaut’s records and baselines…</div>}
-                {answer && assistantResult && (
-                  <div className="assistant-result" aria-live="polite">
-                    <div className="assistant-result-top">
-                      <span className="assistant-mode">{assistantResult.mode}</span>
-                      <span>{assistantResult.sources?.length || 0} evidence sources</span>
-                    </div>
-                    {assistantResult.status_message && <p className="assistant-status-note">{assistantResult.status_message}</p>}
-                    <pre className="assistant-response">{answer}</pre>
-                    {assistantResult.sources?.length > 0 && (
-                      <details className="assistant-evidence">
-                        <summary>View supporting records</summary>
-                        <ul>{assistantResult.sources.map((source: Any) => (
-                          <li key={source.id}><b>[{source.id}]</b> {source.label} <span>{source.type}{source.timestamp ? ` · ${new Date(source.timestamp).toLocaleString()}` : ''}</span></li>
-                        ))}</ul>
-                        <pre>{assistantResult.evidence}</pre>
-                      </details>
-                    )}
-                  </div>
-                )}
-                <div className="notice">
-                  <ShieldCheck size={16} /> The assistant explains recorded
-                  evidence; it does not diagnose, recommend treatment, or
-                  determine alert priority.
-                </div>
-              </section>
-            </>
+            renderAssistantWorkspace()
           )}
         </div>
       </main>
