@@ -13,6 +13,14 @@ import {
   serverTimestamp,
   type Firestore,
 } from 'firebase/firestore';
+import {
+  getDatabase,
+  ref as rtdbRef,
+  push as rtdbPush,
+  onValue as rtdbOnValue,
+  set as rtdbSet,
+  type Database,
+} from 'firebase/database';
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -62,9 +70,9 @@ export function getSavedFirebaseConfig(): FirebaseConfig | null {
 export function saveFirebaseConfig(cfg: FirebaseConfig) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
-    // Reset app instance to reinitialize
     firebaseApp = null;
     firestoreDb = null;
+    rtdbInstance = null;
   } catch (e) {
     console.error('Failed to save Firebase config:', e);
   }
@@ -75,6 +83,7 @@ export function clearFirebaseConfig() {
     localStorage.removeItem(STORAGE_KEY);
     firebaseApp = null;
     firestoreDb = null;
+    rtdbInstance = null;
   } catch (e) {
     console.error('Failed to clear Firebase config:', e);
   }
@@ -82,15 +91,20 @@ export function clearFirebaseConfig() {
 
 let firebaseApp: FirebaseApp | null = null;
 let firestoreDb: Firestore | null = null;
+let rtdbInstance: Database | null = null;
 
-export function initFirebase(): { app: FirebaseApp | null; db: Firestore | null } {
-  if (firestoreDb && firebaseApp) {
-    return { app: firebaseApp, db: firestoreDb };
+export function initFirebase(): {
+  app: FirebaseApp | null;
+  db: Firestore | null;
+  rtdb: Database | null;
+} {
+  if (firebaseApp) {
+    return { app: firebaseApp, db: firestoreDb, rtdb: rtdbInstance };
   }
 
   const config = getSavedFirebaseConfig();
   if (!config || !config.apiKey || !config.projectId) {
-    return { app: null, db: null };
+    return { app: null, db: null, rtdb: null };
   }
 
   try {
@@ -100,95 +114,141 @@ export function initFirebase(): { app: FirebaseApp | null; db: Firestore | null 
     } else {
       firebaseApp = initializeApp(config);
     }
-    firestoreDb = getFirestore(firebaseApp);
-    return { app: firebaseApp, db: firestoreDb };
+
+    try {
+      firestoreDb = getFirestore(firebaseApp);
+    } catch {}
+
+    try {
+      if (config.databaseURL) {
+        rtdbInstance = getDatabase(firebaseApp, config.databaseURL);
+      }
+    } catch {}
+
+    return { app: firebaseApp, db: firestoreDb, rtdb: rtdbInstance };
   } catch (err) {
-    console.warn('Firebase initialization error:', err);
-    return { app: null, db: null };
+    console.warn('Firebase initialization note:', err);
+    return { app: null, db: null, rtdb: null };
   }
 }
 
 export function isFirebaseEnabled(): boolean {
-  const { db } = initFirebase();
-  return db !== null;
+  const { db, rtdb } = initFirebase();
+  return db !== null || rtdb !== null;
 }
 
 /**
- * Real-time subscription to astronaut assessments collection in Firestore
+ * Real-time subscription to astronaut assessments (Firestore + Realtime Database)
  */
 export function subscribeToAssessments(
   astronautId: number,
   onData: (assessments: any[]) => void
 ): () => void {
-  const { db } = initFirebase();
-  if (!db) return () => {};
+  const { db, rtdb } = initFirebase();
+  const unsubs: (() => void)[] = [];
 
-  try {
-    const q = query(
-      collection(db, 'assessments'),
-      where('astronaut_id', '==', astronautId),
-      orderBy('timestamp', 'asc'),
-      limit(100)
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const items = snapshot.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            ...data,
-            timestamp:
-              data.timestamp && typeof data.timestamp.toDate === 'function'
-                ? data.timestamp.toDate().toISOString()
-                : data.timestamp || new Date().toISOString(),
-          };
-        });
-        onData(items);
-      },
-      (err) => {
-        console.warn('Firestore assessments snapshot listener note:', err.message);
-      }
-    );
-
-    return unsubscribe;
-  } catch (e) {
-    console.warn('subscribeToAssessments error:', e);
-    return () => {};
+  // 1. Subscribe to Realtime Database if available
+  if (rtdb) {
+    try {
+      const assessmentsRef = rtdbRef(rtdb, `assessments/${astronautId}`);
+      const unsubRtdb = rtdbOnValue(assessmentsRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+          const list = Object.entries(val).map(([k, v]: [string, any]) => ({
+            id: k,
+            ...v,
+          }));
+          onData(list);
+        }
+      });
+      unsubs.push(() => unsubRtdb());
+    } catch {}
   }
+
+  // 2. Subscribe to Firestore if available
+  if (db) {
+    try {
+      const q = query(
+        collection(db, 'assessments'),
+        where('astronaut_id', '==', astronautId),
+        orderBy('timestamp', 'asc'),
+        limit(100)
+      );
+
+      const unsubFs = onSnapshot(
+        q,
+        (snapshot) => {
+          const items = snapshot.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+              timestamp:
+                data.timestamp && typeof data.timestamp.toDate === 'function'
+                  ? data.timestamp.toDate().toISOString()
+                  : data.timestamp || new Date().toISOString(),
+            };
+          });
+          onData(items);
+        },
+        () => {}
+      );
+      unsubs.push(unsubFs);
+    } catch {}
+  }
+
+  return () => {
+    unsubs.forEach((fn) => {
+      try {
+        fn();
+      } catch {}
+    });
+  };
 }
 
 /**
- * Save assessment record to Firestore
+ * Save assessment record to Firebase (Realtime Database & Firestore)
  */
 export async function saveAssessmentToFirebase(astronautId: number, assessment: any) {
-  const { db } = initFirebase();
-  if (!db) return null;
+  const { db, rtdb } = initFirebase();
+  const payload = {
+    astronaut_id: astronautId,
+    sleep_hours: Number(assessment.sleep_hours) || 7.5,
+    sleep_quality: Math.round(Number(assessment.sleep_quality)) || 7,
+    stress: Math.round(Number(assessment.stress)) || 3,
+    mood: Math.round(Number(assessment.mood)) || 7,
+    fatigue: Math.round(Number(assessment.fatigue)) || 2,
+    symptoms: (assessment.symptoms || '').trim() || 'None reported',
+    source: 'Astronaut self-report (Firebase Cloud)',
+    simulated: false,
+    timestamp: new Date().toISOString(),
+  };
 
-  try {
-    const docRef = await addDoc(collection(db, 'assessments'), {
-      astronaut_id: astronautId,
-      sleep_hours: Number(assessment.sleep_hours) || 7.5,
-      sleep_quality: Math.round(Number(assessment.sleep_quality)) || 7,
-      stress: Math.round(Number(assessment.stress)) || 3,
-      mood: Math.round(Number(assessment.mood)) || 7,
-      fatigue: Math.round(Number(assessment.fatigue)) || 2,
-      symptoms: (assessment.symptoms || '').trim() || 'None reported',
-      source: 'Astronaut self-report (Firebase Cloud)',
-      simulated: false,
-      timestamp: serverTimestamp(),
-      created_at: new Date().toISOString(),
-    });
-    return docRef.id;
-  } catch (err) {
-    console.error('Failed to save assessment to Firebase:', err);
-    return null;
+  // Write to Realtime Database
+  if (rtdb) {
+    try {
+      const newRef = rtdbPush(rtdbRef(rtdb, `assessments/${astronautId}`));
+      await rtdbSet(newRef, payload);
+    } catch (e) {
+      console.warn('Realtime Database assessment note:', e);
+    }
+  }
+
+  // Write to Firestore
+  if (db) {
+    try {
+      await addDoc(collection(db, 'assessments'), {
+        ...payload,
+        timestamp: serverTimestamp(),
+      });
+    } catch (e) {
+      console.warn('Firestore assessment note:', e);
+    }
   }
 }
 
 /**
- * Real-time subscription to medical alerts collection
+ * Real-time subscription to medical alerts
  */
 export function subscribeToAlerts(onData: (alerts: any[]) => void): () => void {
   const { db } = initFirebase();
@@ -196,7 +256,7 @@ export function subscribeToAlerts(onData: (alerts: any[]) => void): () => void {
 
   try {
     const q = query(collection(db, 'alerts'), orderBy('created_at', 'desc'), limit(50));
-    const unsubscribe = onSnapshot(
+    return onSnapshot(
       q,
       (snapshot) => {
         const items = snapshot.docs.map((d) => ({
@@ -205,63 +265,42 @@ export function subscribeToAlerts(onData: (alerts: any[]) => void): () => void {
         }));
         onData(items);
       },
-      (err) => {
-        console.warn('Firestore alerts snapshot listener note:', err.message);
-      }
+      () => {}
     );
-    return unsubscribe;
   } catch {
     return () => {};
   }
 }
 
 /**
- * Save or acknowledge alert in Firestore
- */
-export async function acknowledgeAlertInFirebase(alertId: string, note: string, acknowledgedBy: string) {
-  const { db } = initFirebase();
-  if (!db) return false;
-
-  try {
-    const ref = doc(db, 'alerts', alertId);
-    await setDoc(
-      ref,
-      {
-        acknowledged: true,
-        acknowledged_by: acknowledgedBy,
-        follow_up: note,
-        acknowledged_at: serverTimestamp(),
-      },
-      { merge: true }
-    );
-    return true;
-  } catch (err) {
-    console.error('Failed to acknowledge alert in Firebase:', err);
-    return false;
-  }
-}
-
-/**
- * Stream real-time telemetry tick to Firestore
+ * Stream real-time telemetry tick to Firebase
  */
 export async function streamTelemetryToFirebase(astronautId: number, measurement: any) {
-  const { db } = initFirebase();
-  if (!db) return null;
+  const { db, rtdb } = initFirebase();
+  const payload = {
+    astronaut_id: astronautId,
+    domain: measurement.domain || 'cardiovascular',
+    metric: measurement.metric || 'Resting heart rate',
+    value: measurement.value,
+    unit: measurement.unit || 'bpm',
+    timestamp: new Date().toISOString(),
+    source: 'Live telemetry downlink (Firebase)',
+    simulated: false,
+  };
 
-  try {
-    const docRef = await addDoc(collection(db, 'telemetry'), {
-      astronaut_id: astronautId,
-      domain: measurement.domain || 'cardiovascular',
-      metric: measurement.metric || 'Resting heart rate',
-      value: measurement.value,
-      unit: measurement.unit || 'bpm',
-      timestamp: serverTimestamp(),
-      source: 'Live telemetry downlink (Firebase)',
-      simulated: false,
-    });
-    return docRef.id;
-  } catch (err) {
-    console.warn('Failed to stream telemetry to Firebase:', err);
-    return null;
+  if (rtdb) {
+    try {
+      const newRef = rtdbPush(rtdbRef(rtdb, `telemetry/${astronautId}`));
+      await rtdbSet(newRef, payload);
+    } catch {}
+  }
+
+  if (db) {
+    try {
+      await addDoc(collection(db, 'telemetry'), {
+        ...payload,
+        timestamp: serverTimestamp(),
+      });
+    } catch {}
   }
 }
