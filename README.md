@@ -1,4 +1,4 @@
-# ORBITCARE AI
+# ORBITCARE
 
 An integrated astronaut health intelligence and decision-support prototype. It combines simulated telemetry, self-reported assessments, medical report text extraction, personal baselines, deterministic alerts, a mission timeline, and a project-data-grounded assistant. This is not a clinically validated product; demo records are labeled simulated and alerts are not diagnoses.
 

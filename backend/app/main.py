@@ -11,7 +11,7 @@ from .core import verify_password, make_token, read_token
 from .intelligence import baseline, detect
 from .seed import seed
 
-app=FastAPI(title="ORBITCARE AI",version="1.0.0")
+app=FastAPI(title="ORBITCARE",version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -55,7 +55,7 @@ class MeasurementIn(BaseModel): domain:str; metric:str; value:float; unit:str; t
 @app.get("/")
 @app.get("/api")
 @app.get("/api/health")
-def health(): return {"status":"ok","app":"ORBITCARE AI"}
+def health(): return {"status":"ok","app":"ORBITCARE"}
 @app.post("/api/auth/login")
 def login(data:Login,db:Session=Depends(get_db)):
     user=db.query(User).filter_by(username=data.username).first()
