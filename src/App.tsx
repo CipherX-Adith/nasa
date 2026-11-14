@@ -121,6 +121,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
+  const [assistantResult, setAssistantResult] = useState<Any | null>(null);
+  const [assistantStatus, setAssistantStatus] = useState<Any | null>(null);
   const [assessment, setAssessment] = useState({
     sleep_hours: 7.5,
     sleep_quality: 7,
@@ -670,6 +672,28 @@ export default function App() {
     }
   }
 
+  async function askAssistant(event?: React.FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    const prompt = question.trim();
+    if (!prompt || busy || !selected) return;
+    setBusy(true);
+    setError('');
+    setAnswer('');
+    setAssistantResult(null);
+    try {
+      const result = await api('/assistant/ask', {
+        method: 'POST',
+        body: JSON.stringify({ question: prompt, astronaut_id: selected }),
+      });
+      setAnswer(result.answer || 'No answer was returned. Please try again.');
+      setAssistantResult(result);
+    } catch (e: any) {
+      setError(e.message || 'The assistant request failed. Check the backend connection and try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // Pre-load users on mount for dynamic role presets
   useEffect(() => {
     firebaseGetUsers().then((u) => {
@@ -740,6 +764,15 @@ export default function App() {
   useEffect(() => {
     load();
   }, [token, selected]);
+
+  useEffect(() => {
+    if (!token || tab !== 'AI assistant') return;
+    let active = true;
+    api('/assistant/status')
+      .then((status) => { if (active) setAssistantStatus(status); })
+      .catch(() => { if (active) setAssistantStatus(null); });
+    return () => { active = false; };
+  }, [token, tab]);
 
   const metrics = useMemo(
     () => Array.from(new Set(measurements.map((x: Any) => x.metric))),
@@ -2119,6 +2152,80 @@ export default function App() {
     );
   };
 
+  // Reusable Header Crew Controls: Crew Badge & Consult (Astronaut) or Roster Select & Clearance Authority (Admin), plus Daily Clinical Report
+  const renderHeaderCrewControls = (extraControls?: React.ReactNode) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+      {extraControls}
+      {isAdmin ? (
+        <>
+          <div className="selector">
+            <span>ASTRONAUT</span>
+            <select
+              value={selected || ''}
+              onChange={(e) => setSelected(+e.target.value)}
+            >
+              {astronauts.map((a: Any) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} · {a.call_sign}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={15} />
+          </div>
+
+          {/* Flight Surgeon Authority: Direct Flight Clearance Assignment */}
+          <div className="clearance-control-row" title="Flight Surgeon Clearance Authority">
+            <span className="clearance-control-label">Clearance:</span>
+            <select
+              className="clearance-select"
+              value={astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY'}
+              disabled={clearanceUpdating}
+              onChange={(e) => handleUpdateClearance(astronaut?.id || selected || 1, e.target.value)}
+            >
+              <option value="FLIGHT READY">🟢 FLIGHT READY (Nominal)</option>
+              <option value="RESTRICTED WORKLOAD">🟡 RESTRICTED WORKLOAD (Light EVA)</option>
+              <option value="MEDICAL HOLD">🔴 MEDICAL HOLD (Grounded / Rest)</option>
+            </select>
+          </div>
+        </>
+      ) : (
+        <div className="personal-badge-card">
+          <span className="personal-badge-label">LOGGED IN CREW MEMBER</span>
+          <div className="personal-badge-name">
+            <span className="personal-avatar">
+              {astronaut?.call_sign?.slice(0, 2) || 'OR'}
+            </span>
+            <strong>{astronaut?.name || user?.username}</strong>
+          </div>
+          <div className="personal-badge-callsign">
+            Call Sign: <b>{astronaut?.call_sign}</b> · Mission: <b>{astronaut?.mission || 'Asteria-7'}</b>
+          </div>
+          <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className={`clearance-pill ${(astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY') === 'FLIGHT READY' ? 'ready' : (astronaut?.flight_clearance || astronaut?.status) === 'RESTRICTED WORKLOAD' ? 'restricted' : 'hold'}`}>
+              ● CLEARANCE: {astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY'}
+            </span>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ padding: '4px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              onClick={() => setConsultModalOpen(true)}
+            >
+              🩺 Consult Flight Surgeon
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="btn-clinical-report"
+        onClick={() => handleOpenDailyReport()}
+      >
+        📋 Daily Clinical Report
+      </button>
+    </div>
+  );
+
   const pendingUsers = systemUsers.filter((u: Any) => u.status === 'pending_approval');
   const pendingApplicantsCount = pendingUsers.length;
 
@@ -2452,36 +2559,6 @@ export default function App() {
             ASTERIA-7 <span>/</span> {isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'} <span>/</span> {tab.toUpperCase()}
           </div>
           <div className="top-right">
-            {/* Astronaut Selector in Topbar: Active when NOT on Overview (sub-views) */}
-            {tab !== 'Overview' && isAdmin && (
-              <div className="topbar-crew-select" title="Switch monitored crew member">
-                <Users size={14} className="topbar-crew-icon" />
-                <span className="topbar-select-label">Crew:</span>
-                <select
-                  value={selected || ''}
-                  onChange={(e) => setSelected(+e.target.value)}
-                >
-                  {astronauts.map((a: Any) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({a.call_sign})
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={13} />
-              </div>
-            )}
-
-            {/* Astronaut Badge in Topbar: Active when NOT on Overview (sub-views) */}
-            {tab !== 'Overview' && isUser && (
-              <div className="topbar-user-badge" title="Active Astronaut Profile">
-                <span className="topbar-user-avatar">
-                  {astronaut?.call_sign?.slice(0, 2) || 'OR'}
-                </span>
-                <span className="topbar-user-name">{astronaut?.name}</span>
-                <span className="topbar-user-callsign">{astronaut?.call_sign}</span>
-              </div>
-            )}
-
             {/* Dashboard Mode Indicator */}
             {isAdmin ? (
               <span className="role-pill admin">
@@ -2554,76 +2631,7 @@ export default function App() {
                   </p>
                 </div>
 
-                {/* OVERVIEW MEMBER DETAILS: Dropdown & Clearance Control for Admin, Personal Badge & SOS for User */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                  {isAdmin ? (
-                    <>
-                      <div className="selector">
-                        <span>ASTRONAUT</span>
-                        <select
-                          value={selected || ''}
-                          onChange={(e) => setSelected(+e.target.value)}
-                        >
-                          {astronauts.map((a: Any) => (
-                            <option key={a.id} value={a.id}>
-                              {a.name} · {a.call_sign}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown size={15} />
-                      </div>
-
-                      {/* Flight Surgeon Authority: Direct Flight Clearance Assignment */}
-                      <div className="clearance-control-row" title="Flight Surgeon Clearance Authority">
-                        <span className="clearance-control-label">Clearance:</span>
-                        <select
-                          className="clearance-select"
-                          value={astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY'}
-                          disabled={clearanceUpdating}
-                          onChange={(e) => handleUpdateClearance(astronaut?.id || selected || 1, e.target.value)}
-                        >
-                          <option value="FLIGHT READY">🟢 FLIGHT READY (Nominal)</option>
-                          <option value="RESTRICTED WORKLOAD">🟡 RESTRICTED WORKLOAD (Light EVA)</option>
-                          <option value="MEDICAL HOLD">🔴 MEDICAL HOLD (Grounded / Rest)</option>
-                        </select>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="personal-badge-card">
-                      <span className="personal-badge-label">LOGGED IN CREW MEMBER</span>
-                      <div className="personal-badge-name">
-                        <span className="personal-avatar">
-                          {astronaut?.call_sign?.slice(0, 2) || 'OR'}
-                        </span>
-                        <strong>{astronaut?.name || user?.username}</strong>
-                      </div>
-                      <div className="personal-badge-callsign">
-                        Call Sign: <b>{astronaut?.call_sign}</b> · Mission: <b>{astronaut?.mission || 'Asteria-7'}</b>
-                      </div>
-                      <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <span className={`clearance-pill ${(astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY') === 'FLIGHT READY' ? 'ready' : (astronaut?.flight_clearance || astronaut?.status) === 'RESTRICTED WORKLOAD' ? 'restricted' : 'hold'}`}>
-                          ● Clearance: {astronaut?.flight_clearance || astronaut?.status || 'FLIGHT READY'}
-                        </span>
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          style={{ padding: '4px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                          onClick={() => setConsultModalOpen(true)}
-                        >
-                          🩺 Consult Flight Surgeon
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    className="btn-clinical-report"
-                    onClick={() => handleOpenDailyReport()}
-                  >
-                    📋 Daily Clinical Report
-                  </button>
-                </div>
+                {renderHeaderCrewControls()}
               </div>
 
               {/* ADMIN ABILITY: FLEET OPERATIONAL READINESS & CREW TRIAGE */}
@@ -2993,13 +3001,7 @@ export default function App() {
                       : 'Continuous hemodynamic telemetry, baseline drift, and cardiac parameters.'}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="btn-clinical-report"
-                  onClick={() => handleOpenDailyReport()}
-                >
-                  📋 Daily Clinical Report
-                </button>
+                {renderHeaderCrewControls()}
               </div>
 
               {/* Abnormal Behaviour Warning Banner */}
@@ -3074,6 +3076,7 @@ export default function App() {
                       : 'Log and monitor your daily sleep quality, stress levels, cognitive load, and fatigue.'}
                   </p>
                 </div>
+                {renderHeaderCrewControls()}
               </div>
 
               {/* BEHAVIOURAL KPI STATS ROW */}
@@ -3572,6 +3575,7 @@ export default function App() {
                       : 'Chronological operational milestones, docking events, EVAs, and health markers.'}
                   </p>
                 </div>
+                {renderHeaderCrewControls()}
               </div>
 
               <section className="panel full-timeline">
@@ -3612,8 +3616,8 @@ export default function App() {
                       : 'Your certified flight medical history, physician evaluations, and prescribed microgravity countermeasures.'}
                   </p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {isAdmin && (
+                {renderHeaderCrewControls(
+                  isAdmin && (
                     <button
                       type="button"
                       className="btn-approve"
@@ -3623,15 +3627,8 @@ export default function App() {
                       <FilePlus size={15} />
                       {showAddMedRecordModal ? 'Close Form' : '+ Add Clinical Evaluation'}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn-clinical-report"
-                    onClick={() => handleOpenDailyReport()}
-                  >
-                    📋 Generate Daily Clinical Assessment
-                  </button>
-                </div>
+                  )
+                )}
               </div>
 
               {/* ADMIN: ADD CLINICAL EVALUATION FORM */}
@@ -4122,9 +4119,10 @@ export default function App() {
                   </div>
                   <h1>Evidence-Grounded Assistant</h1>
                   <p className="muted">
-                    Natural language queries grounded in mission telemetry, clinical guidelines, and flight logs.
+                    Ask questions about this astronaut’s measurements, personal baselines, assessments, alerts, and records.
                   </p>
                 </div>
+                {renderHeaderCrewControls()}
               </div>
 
               <section className="panel assistant">
@@ -4144,50 +4142,63 @@ export default function App() {
                         : 'Ask about your mission health'}
                     </h2>
                     <p>
-                      Answers use available records. Interpretations are not
-                      diagnoses.
+                      {assistantStatus?.configured
+                        ? `Gemini is enabled (${assistantStatus.model}). Answers are grounded in retrieved project records.`
+                        : 'Local evidence mode is ready. Add a Gemini key to enable generated explanations; record lookup works without it.'}
                     </p>
                   </div>
                 </div>
-                <div className="prompt-chips">
-                  {[
-                    'Summarize recent health changes',
-                    'What evidence supports the open alerts?',
-                    'How has sleep changed from baseline?',
-                  ].map((x) => (
-                    <button key={x} onClick={() => setQuestion(x)}>
-                      {x}
+                <form className="assistant-form" onSubmit={askAssistant}>
+                  <div className="prompt-chips">
+                    {[
+                      'Summarize recent health changes',
+                      'What evidence supports the open alerts?',
+                      'How has sleep changed from baseline?',
+                    ].map((x) => (
+                      <button key={x} type="button" onClick={() => setQuestion(x)}>
+                        {x}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); askAssistant(); } }}
+                    placeholder="Ask about available measurements, trends, alerts, or mission events…"
+                    aria-label="Ask a question about mission health"
+                    disabled={busy || !selected}
+                  />
+                  <div className="assistant-submit-row">
+                    <button
+                      className="ask-btn"
+                      type="submit"
+                      disabled={!question.trim() || busy || !selected}
+                    >
+                      {busy ? 'Retrieving evidence…' : 'Ask assistant'} <span>→</span>
                     </button>
-                  ))}
-                </div>
-                <textarea
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  placeholder="Ask about available measurements, trends, alerts, or mission events…"
-                />
-                <button
-                  className="ask-btn"
-                  disabled={!question.trim() || busy}
-                  onClick={async () => {
-                    setBusy(true);
-                    try {
-                      const r = await api('/assistant/ask', {
-                        method: 'POST',
-                        body: JSON.stringify({ question, astronaut_id: selected }),
-                      });
-                      setAnswer(
-                        `${r.mode}\n\n${r.answer}\n\nEvidence retrieved:\n${r.evidence}`
-                      );
-                    } catch (e: any) {
-                      setError(e.message);
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  {busy ? 'Retrieving evidence…' : 'Ask assistant'} <span>→</span>
-                </button>
-                {answer && <pre className="answer">{answer}</pre>}
+                    <span className="assistant-shortcut">Press Ctrl + Enter to send</span>
+                  </div>
+                </form>
+                {busy && <div className="assistant-loading" role="status"><span className="loading-dot" /> Searching this astronaut’s records and baselines…</div>}
+                {answer && assistantResult && (
+                  <div className="assistant-result" aria-live="polite">
+                    <div className="assistant-result-top">
+                      <span className="assistant-mode">{assistantResult.mode}</span>
+                      <span>{assistantResult.sources?.length || 0} evidence sources</span>
+                    </div>
+                    {assistantResult.status_message && <p className="assistant-status-note">{assistantResult.status_message}</p>}
+                    <pre className="assistant-response">{answer}</pre>
+                    {assistantResult.sources?.length > 0 && (
+                      <details className="assistant-evidence">
+                        <summary>View supporting records</summary>
+                        <ul>{assistantResult.sources.map((source: Any) => (
+                          <li key={source.id}><b>[{source.id}]</b> {source.label} <span>{source.type}{source.timestamp ? ` · ${new Date(source.timestamp).toLocaleString()}` : ''}</span></li>
+                        ))}</ul>
+                        <pre>{assistantResult.evidence}</pre>
+                      </details>
+                    )}
+                  </div>
+                )}
                 <div className="notice">
                   <ShieldCheck size={16} /> The assistant explains recorded
                   evidence; it does not diagnose, recommend treatment, or

@@ -20,6 +20,47 @@ def test_astronaut_access_is_limited_to_own_profile():
     other=client.get("/api/astronauts/2/measurements",headers={"Authorization":f"Bearer {astronaut}"})
     assert other.status_code==403
 
+def test_assistant_uses_seeded_records_without_gemini(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY",raising=False)
+    astronaut=token("maya")
+    headers={"Authorization":f"Bearer {astronaut}"}
+    status=client.get("/api/assistant/status",headers=headers)
+    assert status.status_code==200 and status.json()["mode"]=="Local evidence"
+    response=client.post("/api/assistant/ask",headers=headers,json={"question":"Summarize recent health changes"})
+    assert response.status_code==200
+    payload=response.json()
+    assert payload["mode"]=="Local evidence mode"
+    assert "Resting heart rate" in payload["answer"]
+    assert payload["sources"]
+
+def test_assistant_answers_alert_questions_with_alert_records(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY",raising=False)
+    astronaut=token("maya")
+    response=client.post("/api/assistant/ask",headers={"Authorization":f"Bearer {astronaut}"},json={"question":"What evidence supports the open alerts?"})
+    assert response.status_code==200
+    assert "Open alerts:" in response.json()["answer"]
+
+def test_assistant_uses_configured_gemini_through_backend(monkeypatch):
+    import httpx
+    monkeypatch.setenv("GEMINI_API_KEY","server-side-test-key")
+    monkeypatch.setenv("GEMINI_MODEL","gemini-3.8-flash")
+    astronaut=token("maya")
+    calls={}
+    class FakeResponse:
+        status_code=200
+        def json(self):
+            return {"candidates":[{"content":{"parts":[{"text":"The latest record is [M1]."}]}}]}
+    def fake_post(url,headers,json,timeout):
+        calls.update(url=url,headers=headers,json=json,timeout=timeout)
+        return FakeResponse()
+    monkeypatch.setattr(httpx,"post",fake_post)
+    response=client.post("/api/assistant/ask",headers={"Authorization":f"Bearer {astronaut}"},json={"question":"Summarize recent changes"})
+    assert response.status_code==200
+    assert response.json()["mode"]=="Gemini · gemini-3.8-flash"
+    assert response.json()["answer"]=="The latest record is [M1]."
+    assert calls["headers"]["x-goog-api-key"]=="server-side-test-key"
+    assert "server-side-test-key" not in calls["url"]
+
 def test_hourly_telemetry_and_clinical_reports():
     medical=token("medical")
     # 1. Test hourly telemetry

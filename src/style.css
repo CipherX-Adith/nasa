@@ -3462,3 +3462,119 @@ textarea {
   justify-content: flex-end;
   gap: 10px;
 }
+
+/* Evidence assistant interaction states */
+.assistant-form {
+  display: grid;
+  gap: 0;
+}
+
+.assistant-submit-row,
+.assistant-result-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.assistant-shortcut,
+.assistant-result-top > span:last-child {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.assistant-loading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary-accent);
+  box-shadow: 0 0 0 4px var(--primary-bg);
+  animation: assistant-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes assistant-pulse {
+  50% { opacity: .45; transform: scale(.82); }
+}
+
+.assistant-result {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--primary-border);
+  border-radius: 9px;
+  background: var(--bg-card);
+}
+
+.assistant-mode {
+  color: var(--primary-accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.assistant-status-note {
+  color: var(--amber-text);
+  font-size: 12px;
+  margin: 10px 0 0;
+}
+
+.assistant-response {
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-main);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 400 14px/1.65 'DM Sans', sans-serif;
+}
+
+.assistant-evidence {
+  margin-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.assistant-evidence summary {
+  cursor: pointer;
+  color: var(--primary-accent);
+  font-weight: 600;
+}
+
+.assistant-evidence ul {
+  display: grid;
+  gap: 7px;
+  padding-left: 18px;
+  margin: 12px 0;
+}
+
+.assistant-evidence li {
+  color: var(--text-main);
+  line-height: 1.5;
+}
+
+.assistant-evidence li span {
+  color: var(--text-muted);
+}
+
+.assistant-evidence > pre {
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--bg-box);
+  color: var(--text-muted);
+  font: 400 11.5px/1.55 'DM Mono', monospace;
+}

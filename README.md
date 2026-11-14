@@ -18,14 +18,14 @@ Copy-Item .env.example .env
 uvicorn app.main:app --reload
 ```
 
-The API documentation is available at http://localhost:8000/docs. On first startup it creates `backend/orbitcare.db` and seeds three simulated astronauts with mission history.
+The API documentation is available at http://localhost:8000/docs. The default backend uses in-memory SQLite. If `backend/.env` defines `DATABASE_URL`, it uses that database instead. It seeds three simulated astronauts on startup when no Firebase crew data is available.
 
 Demo logins use password `orbitcare-demo`:
 
 - Medical officer: `medical`
 - Astronaut: `astronaut`
 
-To enable Gemini, add `GEMINI_API_KEY` to `backend/.env` and restart the backend. Without it, the assistant returns a local evidence retrieval response and all other functionality remains available. PDF text extraction uses PyMuPDF; scanned PDFs are retained with a low confidence indicator and require human review because OCR is not configured.
+To enable Gemini, copy `backend/.env.example` to `backend/.env`, set `GEMINI_API_KEY`, and restart the backend. `GEMINI_MODEL` defaults to `gemini-3.8-flash`. Without a key, the assistant still answers from local project records and personal baselines. If Gemini is unreachable or rejects a request, it falls back to the same record-grounded response and explains that fallback in the UI. The key stays on the backend. PDF text extraction uses PyMuPDF; scanned PDFs are retained with a low confidence indicator and require human review because OCR is not configured.
 
 ## Start the frontend
 
