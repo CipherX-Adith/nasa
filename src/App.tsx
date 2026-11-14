@@ -2175,6 +2175,126 @@ export default function App() {
     );
   };
 
+  // Dynamic Astronaut Demographic Profile for ClyHealth Widget (Age, Sex, Height, Weight)
+  const getCrewDemographics = (crewName?: string, callSign?: string) => {
+    const name = (crewName || '').toLowerCase();
+    const sign = (callSign || '').toLowerCase();
+
+    if (name.includes('david') || sign.includes('nova') || sign.includes('3')) {
+      return {
+        bioAge: 47,
+        chronoAge: 42,
+        sex: 'Male ♂',
+        height: '182',
+        heightUnit: 'cm',
+        weight: '97.5',
+        weightDelta: '▲ +1.5 kg',
+        agingYears: 5,
+      };
+    }
+    if (name.includes('elena') || sign.includes('vega') || sign.includes('2')) {
+      return {
+        bioAge: 41,
+        chronoAge: 39,
+        sex: 'Female ♀',
+        height: '172',
+        heightUnit: 'cm',
+        weight: '66.8',
+        weightDelta: '▲ +0.6 kg',
+        agingYears: 2,
+      };
+    }
+    // Default: Maya Chen (or active crew)
+    return {
+      bioAge: 38,
+      chronoAge: 34,
+      sex: 'Female ♀',
+      height: '168',
+      heightUnit: 'cm',
+      weight: '62.4',
+      weightDelta: '▲ +0.8 kg',
+      agingYears: 4,
+    };
+  };
+
+  // Reusable ClyHealth Biometrics Capsule Widget showing Age, Sex, Height, and Weight
+  const renderBiometricsCapsuleWidget = (showAgingAlert = true, customCrew?: any) => {
+    const targetCrew =
+      customCrew ||
+      astronaut ||
+      (astronauts && astronauts.find((a: Any) => a.id === selected)) ||
+      astronauts[0];
+    const demo = getCrewDemographics(targetCrew?.name, targetCrew?.call_sign);
+
+    return (
+      <div className="cly-biometrics-capsule-widget">
+        {/* 1. Biological Age */}
+        <div className="cly-bio-item">
+          <div className="cly-bio-mark blue-mark" />
+          <div className="cly-bio-content">
+            <span className="cly-bio-label">Biological age</span>
+            <span className="cly-bio-val">
+              {demo.bioAge} <small>yrs</small>
+            </span>
+          </div>
+        </div>
+
+        {/* 2. Chronological Age */}
+        <div className="cly-bio-item">
+          <div className="cly-bio-mark gray-mark" />
+          <div className="cly-bio-content">
+            <span className="cly-bio-label">Chronological age</span>
+            <span className="cly-bio-val">
+              {demo.chronoAge} <small>yrs</small>
+            </span>
+          </div>
+        </div>
+
+        {/* 3. Sex */}
+        <div className="cly-bio-item">
+          <div className="cly-bio-mark blue-mark" />
+          <div className="cly-bio-content">
+            <span className="cly-bio-label">Sex</span>
+            <span className="cly-bio-val cly-sex-text">
+              {demo.sex}
+            </span>
+          </div>
+        </div>
+
+        {/* 4. Height */}
+        <div className="cly-bio-item">
+          <div className="cly-bio-mark blue-mark" />
+          <div className="cly-bio-content">
+            <span className="cly-bio-label">Height</span>
+            <span className="cly-bio-val">
+              {demo.height} <small>{demo.heightUnit}</small>
+            </span>
+          </div>
+        </div>
+
+        {/* 5. Weight */}
+        <div className="cly-bio-item">
+          <div className="cly-bio-mark blue-mark" />
+          <div className="cly-bio-content">
+            <span className="cly-bio-label">Weight</span>
+            <span className="cly-bio-val">
+              {demo.weight} <span className="cly-bio-delta">{demo.weightDelta}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Optional Aging Delta Notification Badge */}
+        {showAgingAlert && (
+          <div className="cly-aging-alert-badge" title="Microgravity & epigenetic aging drift">
+            <span>
+              Your body is aging <strong style={{ color: '#ef4444' }}>{demo.agingYears} years</strong> faster than your chronological age.
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Liquid Glass Digital Twin Master Component (with Reduced Telemetry Graph & Interactive Anatomical Body)
   const renderLiquidGlassDigitalTwinSection = () => {
     const isHourly = telemetryMode === 'hourly';
@@ -2199,43 +2319,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="glass-biometrics-pills">
-            <div className="bio-pill">
-              <span className="bio-pill-indicator blue-ind" />
-              <span className="bio-pill-label">Biological age</span>
-              <span className="bio-pill-value">
-                47 <span className="bio-pill-unit">yrs</span>
-              </span>
-            </div>
-
-            <div className="bio-pill">
-              <span className="bio-pill-indicator gray-ind" />
-              <span className="bio-pill-label">Chronological age</span>
-              <span className="bio-pill-value">
-                42 <span className="bio-pill-unit">yrs</span>
-              </span>
-            </div>
-
-            <div className="bio-pill">
-              <span className="bio-pill-indicator blue-ind" />
-              <span className="bio-pill-label">Sex</span>
-              <span className="bio-pill-value">
-                {astronaut?.call_sign?.includes('2') ? 'Female ♀' : 'Male ♂'}
-              </span>
-            </div>
-
-            <div className="bio-pill">
-              <span className="bio-pill-indicator blue-ind" />
-              <span className="bio-pill-label">Weight</span>
-              <span className="bio-pill-value">
-                97.5 <span className="bio-pill-delta">▲ +1.5 kg</span>
-              </span>
-            </div>
-
-            <div className="glass-aging-alert-pill" title="Microgravity & epigenetic aging drift">
-              <span>Your body is aging <strong style={{ color: '#ef4444' }}>5 years</strong> faster than your chronological age.</span>
-            </div>
-          </div>
+          {renderBiometricsCapsuleWidget(true)}
         </div>
 
         {/* Two-Column Master Grid: Left: Risk Cards & Reduced Graph; Right: Digital Twin Body */}
@@ -3029,7 +3113,10 @@ export default function App() {
                 {renderHeaderCrewControls()}
               </div>
 
-              {/* ADMIN ABILITY: FLEET OPERATIONAL READINESS & CREW TRIAGE */}
+              {/* ClyHealth Biometrics Demographic Capsule Widget (Age, Sex, Height, Weight) */}
+              <div className="overview-biometrics-bar-container" style={{ margin: '4px 0 18px 0' }}>
+                {renderBiometricsCapsuleWidget(true)}
+              </div>
               {renderFleetTriage()}
 
               {/* ASTRONAUT ABILITY: DAILY COUNTERMEASURE ADHERENCE TRACKER */}
@@ -3398,7 +3485,10 @@ export default function App() {
                 {renderHeaderCrewControls()}
               </div>
 
-              {/* Abnormal Behaviour Warning Banner */}
+              {/* ClyHealth Biometrics Demographic Capsule Widget (Age, Sex, Height, Weight) */}
+              <div className="overview-biometrics-bar-container" style={{ margin: '4px 0 18px 0' }}>
+                {renderBiometricsCapsuleWidget(false)}
+              </div>
               {renderAbnormalWarningBanner()}
 
               {/* Cardiovascular Telemetry Trend */}
@@ -4266,7 +4356,10 @@ export default function App() {
                 {renderHeaderCrewControls()}
               </div>
 
-              {/* SECTION 1: PENDING APPROVALS */}
+              {/* ClyHealth Biometrics Demographic Capsule Widget (Age, Sex, Height, Weight) */}
+              <div className="overview-biometrics-bar-container" style={{ margin: '4px 0 18px 0' }}>
+                {renderBiometricsCapsuleWidget(true)}
+              </div>
               <section className="panel">
                 <div className="panel-head">
                   <div>

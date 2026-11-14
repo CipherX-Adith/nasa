@@ -3978,6 +3978,137 @@ textarea {
   color: #dc2626;
 }
 
+/* ==========================================================================
+   CLYHEALTH BIOMETRICS CAPSULE WIDGET (Age, Sex, Height, Weight)
+   Matching Reference Screenshot media_1794666693867_92f23ca6.png
+   ========================================================================== */
+.cly-biometrics-capsule-widget {
+  display: inline-flex;
+  align-items: center;
+  gap: 28px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 9999px;
+  padding: 8px 24px;
+  box-shadow: 0 4px 20px rgba(15, 35, 65, 0.04);
+  flex-wrap: wrap;
+  transition: all 0.25s ease;
+}
+
+[data-theme="dark"] .cly-biometrics-capsule-widget {
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.cly-bio-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+
+.cly-bio-mark {
+  width: 4px;
+  height: 6px;
+  border-radius: 1.5px;
+  margin-bottom: 2px;
+}
+
+.cly-bio-mark.blue-mark {
+  background: #0284c7;
+}
+
+.cly-bio-mark.gray-mark {
+  background: #94a3b8;
+}
+
+.cly-bio-content {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.cly-bio-label {
+  font: 500 12px 'DM Sans', sans-serif;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .cly-bio-label {
+  color: #94a3b8;
+}
+
+.cly-bio-val {
+  font: 800 22px 'Manrope', sans-serif;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .cly-bio-val {
+  color: #f8fafc;
+}
+
+.cly-bio-val small {
+  font: 500 12px 'DM Sans', sans-serif;
+  color: #64748b;
+  font-weight: 500;
+}
+
+[data-theme="dark"] .cly-bio-val small {
+  color: #94a3b8;
+}
+
+.cly-sex-text {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cly-bio-delta {
+  font: 700 11px 'DM Sans', sans-serif;
+  color: #0284c7;
+  background: rgba(2, 132, 199, 0.08);
+  padding: 1px 6px;
+  border-radius: 6px;
+  margin-left: 2px;
+}
+
+[data-theme="dark"] .cly-bio-delta {
+  background: rgba(2, 132, 199, 0.2);
+  color: #38bdf8;
+}
+
+.cly-aging-alert-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  border-radius: 9999px;
+  padding: 6px 16px;
+  font: 500 12px 'DM Sans', sans-serif;
+  color: var(--text-heading);
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .cly-aging-alert-badge {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.overview-biometrics-bar-container {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+}
+
 /* Two-Column Master Grid (Left: Reduced Graph & Risk Cards; Right: Digital Twin) */
 .digital-twin-layout {
   display: grid;
