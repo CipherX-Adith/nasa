@@ -6092,13 +6092,13 @@ textarea {
 .orbit {
   z-index: 0;
   transform-origin: center;
-  animation: orbitcare-ring-one 22s ease-in-out infinite alternate;
-  will-change: transform;
+  animation: orbitcare-ring-one 20s linear infinite;
+  will-change: transform, opacity;
 }
 
 .orbit-two {
   transform-origin: center;
-  animation: orbitcare-ring-two 27s ease-in-out infinite alternate;
+  animation: orbitcare-ring-two 28s linear infinite reverse;
 }
 
 .art-copy {
@@ -6122,13 +6122,19 @@ textarea {
 }
 
 @keyframes orbitcare-ring-one {
-  0% { transform: rotate(-35deg) scale(1); opacity: .7; }
-  100% { transform: rotate(-24deg) scale(1.035); opacity: 1; }
+  0% { transform: translate3d(0, 0, 0) rotate(-35deg) scale(1); opacity: .72; }
+  25% { transform: translate3d(9px, -6px, 0) rotate(55deg) scale(1.018); opacity: 1; }
+  50% { transform: translate3d(1px, -12px, 0) rotate(145deg) scale(1.035); opacity: .8; }
+  75% { transform: translate3d(-8px, -5px, 0) rotate(235deg) scale(1.016); opacity: 1; }
+  100% { transform: translate3d(0, 0, 0) rotate(325deg) scale(1); opacity: .72; }
 }
 
 @keyframes orbitcare-ring-two {
-  0% { transform: rotate(28deg) scale(1); opacity: .8; }
-  100% { transform: rotate(17deg) scale(1.03); opacity: 1; }
+  0% { transform: translate3d(0, 0, 0) rotate(28deg) scale(1); opacity: .8; }
+  25% { transform: translate3d(-10px, 7px, 0) rotate(118deg) scale(1.02); opacity: 1; }
+  50% { transform: translate3d(-2px, 13px, 0) rotate(208deg) scale(1.04); opacity: .82; }
+  75% { transform: translate3d(9px, 6px, 0) rotate(298deg) scale(1.018); opacity: 1; }
+  100% { transform: translate3d(0, 0, 0) rotate(388deg) scale(1); opacity: .8; }
 }
 
 @media (prefers-reduced-motion: reduce) {
