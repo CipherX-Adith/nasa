@@ -1,4 +1,5 @@
 import os
+import threading
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -12,7 +13,13 @@ if DATABASE_URL == "sqlite:///:memory:":
 engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 class Base(DeclarativeBase): pass
+
+_db_lock = threading.RLock()
+
 def get_db():
-    db = SessionLocal()
-    try: yield db
-    finally: db.close()
+    with _db_lock:
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
