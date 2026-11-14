@@ -156,21 +156,185 @@ button {
 .shell {
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   background: var(--bg-page);
   color: var(--text-main);
+  position: relative;
+}
+
+/* FIXED LOGO & NAVIGATION ANCHOR IN UPPER SECTION */
+.fixed-brand-anchor {
+  position: fixed;
+  top: 9px;
+  left: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  user-select: none;
+}
+
+.brand-logo-container {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 4px;
+  transition: transform 0.16s ease, opacity 0.16s ease;
+}
+
+.brand-logo-container:hover {
+  transform: scale(1.02);
+  opacity: 0.95;
+}
+
+.brand-logo-fixed {
+  display: block;
+  width: 172px;
+  height: auto;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.08));
+}
+
+.nav-arrow-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 172px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-page);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.18s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme='dark'] .nav-arrow-trigger {
+  background: rgba(14, 26, 40, 0.85);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.nav-arrow-trigger:hover {
+  background: var(--bg-card);
+  border-color: var(--primary-accent);
+  color: var(--primary-accent);
+  box-shadow: 0 3px 10px rgba(13, 148, 136, 0.2);
+}
+
+.nav-arrow-trigger.open {
+  background: var(--primary-accent);
+  border-color: var(--primary-accent);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.4);
+}
+
+.arrow-trigger-text {
+  font: 600 10px 'DM Mono', monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.arrow-chevron-icon {
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.arrow-chevron-icon.rotated {
+  transform: rotate(180deg);
+}
+
+/* FLOATING LIQUID-GLASS POPUP DRAWER */
+.nav-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 20, 32, 0.35);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 1001;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.nav-popup-drawer {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 260px;
+  max-height: calc(100vh - 84px);
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 14px;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.2), 0 4px 14px rgba(0, 0, 0, 0.08);
+  padding: 16px 14px;
+  z-index: 1002;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: popupSlideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top left;
+}
+
+[data-theme='dark'] .nav-popup-drawer {
+  background: rgba(11, 23, 34, 0.94);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.nav-popup-drawer .mission-label {
+  margin: 0 4px 2px;
+  font: 700 11px 'DM Mono', monospace;
+  letter-spacing: .12em;
+  color: var(--text-muted);
+}
+
+.nav-popup-drawer nav {
+  display: grid;
+  gap: 4px;
+}
+
+.nav-popup-drawer .sidebar-bottom {
+  margin-top: 6px;
+  border-top: 1px solid var(--border-page);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nav-popup-drawer .profile {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@keyframes popupSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .sidebar {
-  width: 244px;
-  background: var(--bg-sidebar);
-  border-right: 1px solid var(--border-page);
-  position: fixed;
-  inset: 0 auto 0 0;
-  padding: 25px 15px;
-  display: flex;
-  flex-direction: column;
-  z-index: 2;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  display: none;
 }
 
 .brand {
@@ -361,21 +525,26 @@ button {
 }
 
 .main {
-  margin-left: 244px;
-  width: calc(100% - 244px);
+  margin-left: 0;
+  width: 100%;
   background: var(--bg-page);
   min-height: 100vh;
   transition: background-color 0.2s ease;
 }
 
 .topbar {
-  height: 58px;
+  height: 64px;
   background: var(--bg-topbar);
   border-bottom: 1px solid var(--border-page);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 34px;
+  padding: 0 34px 0 230px;
+  position: sticky;
+  top: 0;
+  z-index: 900;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
@@ -2109,11 +2278,11 @@ td {
 
 @media(max-width: 1100px) {
   .sidebar {
-    width: 205px;
+    display: none;
   }
   .main {
-    margin-left: 205px;
-    width: calc(100% - 205px);
+    margin-left: 0;
+    width: 100%;
   }
   .grid-main, .grid-lower {
     grid-template-columns: 1fr;
@@ -2123,40 +2292,40 @@ td {
   }
 }
 
-@media(max-width: 720px) {
+@media(max-width: 768px) {
   .sidebar {
-    width: 56px;
-    padding: 15px 7px;
-  }
-  .brand {
-    padding: 0;
-  }
-  .brand > div:not(.logo), .mission-label, .nav:not(.active), .nav.active span {
     display: none;
   }
-  .sidebar nav {
-    margin-top: 35px;
+  .fixed-brand-anchor {
+    left: 14px;
+    top: 8px;
   }
-  .nav {
-    justify-content: center;
-    padding: 0;
-    width: 40px;
+  .brand-logo-fixed {
+    width: 135px;
   }
-  .profile {
-    justify-content: center;
+  .nav-arrow-trigger {
+    width: 135px;
+    padding: 3px 6px;
   }
-  .profile > div:not(.avatar), .profile > button, .sidebar .live {
+  .arrow-trigger-text {
+    font-size: 8.5px;
+  }
+  .nav-popup-drawer {
+    width: 240px;
+  }
+  .topbar {
+    padding: 0 14px 0 160px;
+  }
+  .crumb {
+    font-size: 10px;
     display: none;
   }
   .main {
-    margin-left: 56px;
-    width: calc(100% - 56px);
-  }
-  .topbar {
-    padding: 0 13px;
+    margin-left: 0;
+    width: 100%;
   }
   .content {
-    padding: 20px 13px;
+    padding: 18px 12px;
   }
   .heading-row {
     align-items: flex-start;

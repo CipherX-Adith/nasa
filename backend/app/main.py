@@ -268,10 +268,51 @@ def sync_from_firebase(db: Session):
         # Keep credentials, record payloads, and response bodies out of logs.
         return
 
+def ensure_seed_astronauts(db: Session):
+    default_astros = [
+        {"id": 1, "name": "Maya Chen", "call_sign": "ORION-1", "mission": "Asteria-7", "status": "Active", "flight_clearance": "FLIGHT READY"},
+        {"id": 2, "name": "Elena Rossi", "call_sign": "VEGA-2", "mission": "Asteria-7", "status": "Active", "flight_clearance": "FLIGHT READY"},
+        {"id": 3, "name": "David Okafor", "call_sign": "NOVA-3", "mission": "Asteria-7", "status": "Active", "flight_clearance": "FLIGHT READY"},
+    ]
+    for a in default_astros:
+        row = db.get(Astronaut, a["id"])
+        if not row:
+            db.add(Astronaut(**a, simulated=True))
+    db.commit()
+
+def ensure_seed_users(db: Session):
+    default_users = [
+        {"username": "medical", "role": "medical", "full_name": "Dr. Robert Vance", "specialization": "Chief Medical Officer (Admin Clearance)", "astronaut_id": None},
+        {"username": "astronaut", "role": "astronaut", "full_name": "Maya Chen", "call_sign": "ORION-1", "specialization": "Commander / Mission Specialist", "astronaut_id": 1},
+        {"username": "maya", "role": "astronaut", "full_name": "Maya Chen", "call_sign": "ORION-1", "specialization": "Commander / Mission Specialist", "astronaut_id": 1},
+        {"username": "elena", "role": "astronaut", "full_name": "Elena Rossi", "call_sign": "VEGA-2", "specialization": "Flight Engineer / Systems Lead", "astronaut_id": 2},
+        {"username": "david", "role": "astronaut", "full_name": "David Okafor", "call_sign": "NOVA-3", "specialization": "Science & Payload Specialist", "astronaut_id": 3},
+    ]
+    for u in default_users:
+        user_row = db.query(User).filter_by(username=u["username"]).first()
+        if user_row is None:
+            db.add(User(
+                username=u["username"],
+                password_hash=hash_password("orbitcare-demo"),
+                role=u["role"],
+                full_name=u["full_name"],
+                call_sign=u.get("call_sign", ""),
+                specialization=u["specialization"],
+                astronaut_id=u["astronaut_id"],
+                status="approved",
+            ))
+        else:
+            if not verify_password("orbitcare-demo", user_row.password_hash):
+                user_row.password_hash = hash_password("orbitcare-demo")
+            user_row.status = "approved"
+    db.commit()
+
 with next(get_db()) as db:
     sync_from_firebase(db)
-    if db.query(Astronaut).count() == 0 and not (os.getenv("VERCEL") or os.getenv("APP_ENV", "").lower() == "production"):
+    if db.query(Astronaut).count() == 0:
         seed(db)
+    ensure_seed_astronauts(db)
+    ensure_seed_users(db)
 
 def current_user(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -460,6 +501,9 @@ def register(data: RegisterIn, db: Session = Depends(get_db)):
 def login(data: Login, db: Session = Depends(get_db)):
     uname = data.username.strip().lower()
     user = db.query(User).filter_by(username=uname).first()
+    if not user:
+        ensure_seed_users(db)
+        user = db.query(User).filter_by(username=uname).first()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(401, "Invalid username or password")
     

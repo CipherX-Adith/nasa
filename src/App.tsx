@@ -144,6 +144,19 @@ export default function App() {
   // Interactive Digital Twin active organ state (synchronized with telemetry graphs)
   const [selectedOrgan, setSelectedOrgan] = useState<OrganKey>('heart');
 
+  // Collapsible navigation popup menu triggered by arrow mark under the logo
+  const [navPopupOpen, setNavPopupOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setNavPopupOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Real-time synchronization & live telemetry state
   const [liveStreaming, setLiveStreaming] = useState(true);
   const [packetCount, setPacketCount] = useState(0);
@@ -2751,64 +2764,108 @@ export default function App() {
 
   return (
     <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div>
-            <img className="brand-logo" src="/orbitcare-logo-transparent.png" alt="ORBITCARE" />
-            <small>{isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'}</small>
-          </div>
+      {/* FIXED LOGO & EXPANDABLE POPUP NAVIGATION IN UPPER SECTION */}
+      <div className="fixed-brand-anchor">
+        <div
+          className="brand-logo-container"
+          onClick={() => {
+            handleTabChange('Overview');
+            setNavPopupOpen(false);
+          }}
+          title="Return to Overview"
+          role="button"
+          tabIndex={0}
+        >
+          <img className="brand-logo-fixed" src="/orbitcare-logo-transparent.png" alt="ORBITCARE" />
         </div>
-        <div className="mission-label">
-          {isAdmin ? 'FLIGHT SURGEON' : 'PERSONAL CONSOLE'}
-        </div>
-        <nav>
-          {[
-            [LayoutDashboard, 'Overview'],
-            [HeartPulse, 'Cardiovascular'],
-            [Wind, 'Behavioural'],
-            [Clock3, 'Mission timeline'],
-            [FileText, 'Medical records'],
-            [MessageCircle, 'AI assistant'],
-            ...(isAdmin ? [[UserCheck, 'Crew accounts']] : []),
-          ].map(([Icon, label]: any) => (
-            <button
-              className={tab === label ? 'nav active' : 'nav'}
-              onClick={() => handleTabChange(label)}
-              key={label}
+        <button
+          type="button"
+          className={`nav-arrow-trigger ${navPopupOpen ? 'open' : ''}`}
+          onClick={() => setNavPopupOpen((prev) => !prev)}
+          aria-expanded={navPopupOpen}
+          aria-label="Toggle navigation menu"
+          title={navPopupOpen ? 'Close Navigation Menu' : 'Open Navigation Menu'}
+        >
+          <span className="arrow-trigger-text">
+            {isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'}
+          </span>
+          <ChevronDown
+            size={14}
+            className={`arrow-chevron-icon ${navPopupOpen ? 'rotated' : ''}`}
+          />
+        </button>
+
+        {/* FLOATING LIQUID-GLASS POPUP DRAWER */}
+        {navPopupOpen && (
+          <>
+            <div
+              className="nav-popup-backdrop"
+              onClick={() => setNavPopupOpen(false)}
+              aria-hidden="true"
+            />
+            <div
+              className="nav-popup-drawer liquid-glass-panel"
+              role="dialog"
+              aria-label="Navigation Menu"
             >
-              <Icon size={18} />
-              <span>{label}</span>
-              {label === 'Crew accounts' && pendingApplicantsCount > 0 && (
-                <span className="nav-badge">{pendingApplicantsCount}</span>
-              )}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className={`live ${isPulseActive ? 'pulse-tick' : ''}`}>
-            <i /> {liveStreaming ? 'STORED SAMPLE REFRESH ACTIVE' : 'SAMPLE REFRESH PAUSED'}
-          </div>
-          <div className="profile">
-            <div className="avatar">{isAdmin ? 'MO' : 'AS'}</div>
-            <div>
-              <b>{user?.username}</b>
-              <small>
-                {isAdmin ? 'Medical Officer (Admin)' : `${astronaut?.name || 'Astronaut'} (User)`}
-              </small>
+              <div className="mission-label">
+                {isAdmin ? 'FLIGHT SURGEON' : 'PERSONAL CONSOLE'}
+              </div>
+              <nav>
+                {[
+                  [LayoutDashboard, 'Overview'],
+                  [HeartPulse, 'Cardiovascular'],
+                  [Wind, 'Behavioural'],
+                  [Clock3, 'Mission timeline'],
+                  [FileText, 'Medical records'],
+                  [MessageCircle, 'AI assistant'],
+                  ...(isAdmin ? [[UserCheck, 'Crew accounts']] : []),
+                ].map(([Icon, label]: any) => (
+                  <button
+                    className={tab === label ? 'nav active' : 'nav'}
+                    onClick={() => {
+                      handleTabChange(label);
+                      setNavPopupOpen(false);
+                    }}
+                    key={label}
+                  >
+                    <Icon size={18} />
+                    <span>{label}</span>
+                    {label === 'Crew accounts' && pendingApplicantsCount > 0 && (
+                      <span className="nav-badge">{pendingApplicantsCount}</span>
+                    )}
+                  </button>
+                ))}
+              </nav>
+              <div className="sidebar-bottom">
+                <div className={`live ${isPulseActive ? 'pulse-tick' : ''}`}>
+                  <i /> {liveStreaming ? 'TELEMETRY DOWNLINK ACTIVE' : 'TELEMETRY STREAM PAUSED'}
+                </div>
+                <div className="profile">
+                  <div className="avatar">{isAdmin ? 'MO' : 'AS'}</div>
+                  <div>
+                    <b>{user?.username}</b>
+                    <small>
+                      {isAdmin ? 'Medical Officer (Admin)' : `${astronaut?.name || 'Astronaut'} (User)`}
+                    </small>
+                  </div>
+                  <button
+                    title="Sign out"
+                    onClick={() => {
+                      localStorage.clear();
+                      setToken('');
+                      setUser(null);
+                      setNavPopupOpen(false);
+                    }}
+                  >
+                    <LogOut size={16} />
+                  </button>
+                </div>
+              </div>
             </div>
-            <button
-              title="Sign out"
-              onClick={() => {
-                localStorage.clear();
-                setToken('');
-                setUser(null);
-              }}
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-        </div>
-      </aside>
+          </>
+        )}
+      </div>
 
       <main className="main">
         <header className="topbar">
