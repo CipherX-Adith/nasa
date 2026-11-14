@@ -2078,79 +2078,101 @@ export default function App() {
     );
   };
 
-  // Reusable Header Crew Controls: Crew Badge & Consult (Astronaut) or Roster Select & Clearance Authority (Admin), plus Daily Clinical Report
-  const renderHeaderCrewControls = (extraControls?: React.ReactNode) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-      {extraControls}
-      {isAdmin ? (
-        <>
-          <div className="selector">
-            <span>ASTRONAUT</span>
-            <select
-              value={selected || ''}
-              onChange={(e) => setSelected(+e.target.value)}
-            >
-              {astronauts.map((a: Any) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} · {a.call_sign}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={15} />
-          </div>
+  // Reusable Header Crew Controls: Crew Badge & Daily Clinical Report across every single page
+  const renderHeaderCrewControls = (extraControls?: React.ReactNode) => {
+    // Current crew member to display (the selected astronaut, or logged in astronaut, or fallback)
+    const activeCrew = astronaut || (astronauts && astronauts.find((a: Any) => a.id === selected)) || astronauts[0] || {
+      id: 1,
+      name: user?.full_name || user?.username || 'Maya Chen',
+      call_sign: user?.call_sign || 'ORION-1',
+      mission: 'Asteria-7',
+      flight_clearance: 'FLIGHT READY',
+    };
 
-          {/* Flight Surgeon Authority: Direct Flight Clearance Assignment */}
-          <div className="clearance-control-row" title="Medical officer records explicit clearance status">
+    return (
+      <div className="header-crew-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        {extraControls}
+
+        {/* LOGGED IN / ACTIVE CREW MEMBER BADGE CARD */}
+        <div className="personal-badge-card">
+          <div className="personal-badge-top-row">
+            <span className="personal-badge-label">
+              {isAdmin ? 'EVALUATING CREW MEMBER' : 'LOGGED IN CREW MEMBER'}
+            </span>
+            {isAdmin && astronauts.length > 1 && (
+              <div className="admin-astro-quick-select">
+                <select
+                  value={selected || activeCrew.id || ''}
+                  onChange={(e) => setSelected(+e.target.value)}
+                  title="Switch Astronaut"
+                >
+                  {astronauts.map((a: Any) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} ({a.call_sign})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={11} className="select-arrow" />
+              </div>
+            )}
+          </div>
+          <div className="personal-badge-name">
+            <span className="personal-avatar">
+              {activeCrew.call_sign?.slice(0, 2) || 'OR'}
+            </span>
+            <strong>{activeCrew.name}</strong>
+          </div>
+          <div className="personal-badge-callsign">
+            Call Sign: <b>{activeCrew.call_sign}</b> · Mission: <b>{activeCrew.mission || 'Asteria-7'}</b>
+          </div>
+        </div>
+
+        {/* Flight Surgeon Authority: Direct Flight Clearance Assignment (Admin only) */}
+        {isAdmin && (
+          <div className="clearance-control-row" title="Flight Surgeon medical clearance sign-off">
             <span className="clearance-control-label">Clearance:</span>
             <select
               className="clearance-select"
-              value={astronaut?.flight_clearance || 'UNREVIEWED'}
+              value={activeCrew.flight_clearance || 'FLIGHT READY'}
               disabled={clearanceUpdating}
-              onChange={(e) => handleUpdateClearance(astronaut?.id || selected || 1, e.target.value)}
+              onChange={(e) => handleUpdateClearance(activeCrew.id || selected || 1, e.target.value)}
             >
               <option value="FLIGHT READY">🟢 FLIGHT READY (Nominal)</option>
               <option value="RESTRICTED WORKLOAD">🟡 RESTRICTED WORKLOAD (Light EVA)</option>
               <option value="MEDICAL HOLD">🔴 MEDICAL HOLD (Grounded / Rest)</option>
             </select>
           </div>
-        </>
-      ) : (
-        <div className="personal-badge-card">
-          <span className="personal-badge-label">LOGGED IN CREW MEMBER</span>
-          <div className="personal-badge-name">
-            <span className="personal-avatar">
-              {astronaut?.call_sign?.slice(0, 2) || 'OR'}
-            </span>
-            <strong>{astronaut?.name || user?.username}</strong>
-          </div>
-          <div className="personal-badge-callsign">
-            Call Sign: <b>{astronaut?.call_sign}</b> · Mission: <b>{astronaut?.mission || 'Asteria-7'}</b>
-          </div>
-          <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span className={`clearance-pill ${(astronaut?.flight_clearance || 'UNREVIEWED') === 'FLIGHT READY' ? 'ready' : (astronaut?.flight_clearance || 'UNREVIEWED') === 'RESTRICTED WORKLOAD' ? 'restricted' : 'hold'}`}>
-              ● CLEARANCE: {astronaut?.flight_clearance || 'UNREVIEWED'}
+        )}
+
+        {/* Astronaut Actions: Clearance Status & Consult Flight Surgeon */}
+        {!isAdmin && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            <span className={`clearance-pill ${(activeCrew.flight_clearance || 'FLIGHT READY') === 'FLIGHT READY' ? 'ready' : (activeCrew.flight_clearance || '') === 'RESTRICTED WORKLOAD' ? 'restricted' : 'hold'}`}>
+              ● CLEARANCE: {activeCrew.flight_clearance || 'FLIGHT READY'}
             </span>
             <button
               type="button"
               className="btn-secondary"
-              style={{ padding: '4px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              style={{ padding: '6px 12px', fontSize: '11.5px', display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: '7px' }}
               onClick={() => setConsultModalOpen(true)}
             >
               🩺 Consult Flight Surgeon
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      <button
-        type="button"
-        className="btn-clinical-report"
-        onClick={() => handleOpenDailyReport()}
-      >
-        📋 Daily Clinical Report
-      </button>
-    </div>
-  );
+        {/* DAILY CLINICAL REPORT BUTTON */}
+        <button
+          type="button"
+          className="btn-clinical-report"
+          onClick={() => handleOpenDailyReport()}
+          title="Open Daily Clinical Report"
+        >
+          📋 Daily Clinical Report
+        </button>
+      </div>
+    );
+  };
 
   // Liquid Glass Digital Twin Master Component (with Reduced Telemetry Graph & Interactive Anatomical Body)
   const renderLiquidGlassDigitalTwinSection = () => {
@@ -4182,6 +4204,7 @@ export default function App() {
                     Authorize pending astronaut applications, manage mission roster access, or provision new crew member credentials.
                   </p>
                 </div>
+                {renderHeaderCrewControls()}
               </div>
 
               {/* SECTION 1: PENDING APPROVALS */}
