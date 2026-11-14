@@ -150,5 +150,8 @@ def seed(db):
     db.add_all([
         User(username="medical", password_hash=hash_password("orbitcare-demo"), role="medical"),
         User(username="astronaut", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[0].id),
+        User(username="maya", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[0].id),
+        User(username="elena", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[1].id),
+        User(username="david", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[2].id),
     ])
     db.commit()

@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Sun,
   Upload,
+  UserCheck,
   Users,
   Wind,
 } from 'lucide-react';
@@ -83,8 +84,16 @@ export default function App() {
     symptoms: 'None reported',
   });
 
+  // Login form controlled state for easy 1-click preset switching
+  const [usernameInput, setUsernameInput] = useState('medical');
+  const [passwordInput, setPasswordInput] = useState('orbitcare-demo');
+
   // Selected pill in the Mission Telemetry Trend card
   const [selectedMetric, setSelectedMetric] = useState('Heart Rate');
+
+  // Role detection
+  const isAdmin = user?.role === 'medical';
+  const isUser = !isAdmin && !!user;
 
   async function api(path: string, options: RequestInit = {}) {
     const res = await fetch(API + path, {
@@ -107,21 +116,22 @@ export default function App() {
   async function login(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
-    const form = e.currentTarget;
-    const username = (form.elements.namedItem('username') as HTMLInputElement)
-      .value;
-    const password = (form.elements.namedItem('password') as HTMLInputElement)
-      .value;
 
     try {
       const d = await api('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: usernameInput, password: passwordInput }),
       });
       setToken(d.access_token);
       setUser(d);
       localStorage.setItem('token', d.access_token);
       localStorage.setItem('user', JSON.stringify(d));
+      // For regular astronaut user, pre-select their own astronaut_id
+      if (d.role !== 'medical' && d.astronaut_id) {
+        setSelected(d.astronaut_id);
+      } else {
+        setSelected(null);
+      }
       setError('');
     } catch (x: any) {
       setError(x.message);
@@ -135,8 +145,13 @@ export default function App() {
     try {
       const a = await api('/astronauts');
       setAstronauts(a);
-      const id = selected || user?.astronaut_id || a[0]?.id;
-      if (!selected) setSelected(id);
+      // For regular user, strictly lock ID to their assigned astronaut_id
+      const id = (user?.role !== 'medical' && user?.astronaut_id)
+        ? user.astronaut_id
+        : (selected || a[0]?.id);
+
+      setSelected(id);
+
       if (id) {
         const [m, b, l, t, d] = await Promise.all([
           api(`/astronauts/${id}/measurements`),
@@ -160,7 +175,7 @@ export default function App() {
     load();
   }, [token, selected]);
 
-  const astronaut = astronauts.find((a: Any) => a.id === selected);
+  const astronaut = astronauts.find((a: Any) => a.id === selected) || astronauts[0];
   const metrics = useMemo(
     () => Array.from(new Set(measurements.map((x: Any) => x.metric))),
     [measurements]
@@ -267,7 +282,7 @@ export default function App() {
     let lower: number;
     let upper: number;
 
-    if (selectedMetric === 'Heart Rate') {
+    if (selectedMetric === 'Heart Rate' && (selected === 1 || !selected)) {
       median = 65.4;
       lower = 62.73;
       upper = 68.07;
@@ -348,7 +363,7 @@ export default function App() {
       domain: yDomain,
       ticks: yTicks,
     };
-  }, [measurements, backendMetric, selectedMetric]);
+  }, [measurements, backendMetric, selectedMetric, selected]);
 
   // Custom dot to render distinct red circular markers with dark border on drift points
   const CustomDot = (props: any) => {
@@ -416,8 +431,9 @@ export default function App() {
             </span>
           </div>
           <p className="telemetry-subtitle">
-            Tracking individual adaptation relative to calibrated normal
-            range ({telemetryData.median} {telemetryData.unit})
+            {isAdmin
+              ? `Tracking adaptation for ${astronaut?.name || 'astronaut'} relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`
+              : `Tracking your personal adaptation relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`}
           </p>
         </div>
 
@@ -587,35 +603,91 @@ export default function App() {
             in context.
           </h1>
           <p className="muted">
-            Sign in to view health trends, mission alerts, and evidence-grounded
-            insights.
+            Sign in as <b>Medical Officer (Admin)</b> to monitor the entire crew, or as an <b>Astronaut (User)</b> to view your personal biometric telemetry.
           </p>
+
           <form onSubmit={login}>
             <label>
               Username
-              <input name="username" defaultValue="medical" required />
+              <input
+                name="username"
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
+                required
+              />
             </label>
             <label>
               Password
               <input
                 name="password"
                 type="password"
-                defaultValue="orbitcare-demo"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
                 required
               />
             </label>
             {error && <p className="error">{error}</p>}
             <button disabled={busy}>
-              {busy ? 'Signing in…' : 'Sign in'} <span>→</span>
+              {busy ? 'Signing in…' : 'Sign in to Dashboard'} <span>→</span>
             </button>
           </form>
+
+          {/* Quick Access Role Presets */}
+          <div className="login-roles">
+            <div className="login-roles-title">QUICK ACCESS DEMO PRESETS:</div>
+            <div className="login-roles-buttons">
+              <button
+                type="button"
+                className="role-preset-btn admin-preset"
+                onClick={() => {
+                  setUsernameInput('medical');
+                  setPasswordInput('orbitcare-demo');
+                }}
+              >
+                <ShieldCheck size={14} color="#d97706" />
+                <span>Admin (Medical Officer)</span>
+              </button>
+              <button
+                type="button"
+                className="role-preset-btn"
+                onClick={() => {
+                  setUsernameInput('astronaut');
+                  setPasswordInput('orbitcare-demo');
+                }}
+              >
+                <Users size={14} color="#0284c7" />
+                <span>User (Maya Chen)</span>
+              </button>
+              <button
+                type="button"
+                className="role-preset-btn"
+                onClick={() => {
+                  setUsernameInput('elena');
+                  setPasswordInput('orbitcare-demo');
+                }}
+              >
+                <Users size={14} color="#0284c7" />
+                <span>User (Elena Rossi)</span>
+              </button>
+              <button
+                type="button"
+                className="role-preset-btn"
+                onClick={() => {
+                  setUsernameInput('david');
+                  setPasswordInput('orbitcare-demo');
+                }}
+              >
+                <Users size={14} color="#0284c7" />
+                <span>User (David Okafor)</span>
+              </button>
+            </div>
+          </div>
+
           <div className="credentials">
-            DEMO ACCESS <b>medical</b> or <b>astronaut</b> · Password{' '}
-            <b>orbitcare-demo</b>
+            Demo Credentials · Password <b>orbitcare-demo</b>
           </div>
           <div className="login-foot">
-            <ShieldCheck size={14} /> Decision support prototype · Simulated
-            mission data
+            <ShieldCheck size={14} /> Decision support prototype · Simulated mission telemetry
           </div>
         </section>
 
@@ -647,10 +719,12 @@ export default function App() {
             <strong>
               ORBITCARE <span>AI</span>
             </strong>
-            <small>MISSION HEALTH</small>
+            <small>{isAdmin ? 'MISSION CONTROL' : 'ASTRONAUT PORTAL'}</small>
           </div>
         </div>
-        <div className="mission-label">MISSION CONTROL</div>
+        <div className="mission-label">
+          {isAdmin ? 'FLIGHT SURGEON' : 'PERSONAL CONSOLE'}
+        </div>
         <nav>
           {[
             [LayoutDashboard, 'Overview'],
@@ -672,14 +746,14 @@ export default function App() {
         </nav>
         <div className="sidebar-bottom">
           <div className="live">
-            <i /> MISSION SIMULATION LIVE
+            <i /> {isAdmin ? 'MISSION SIMULATION LIVE' : 'TELEMETRY STREAM ACTIVE'}
           </div>
           <div className="profile">
-            <div className="avatar">{user?.role === 'medical' ? 'MO' : 'AS'}</div>
+            <div className="avatar">{isAdmin ? 'MO' : 'AS'}</div>
             <div>
               <b>{user?.username}</b>
               <small>
-                {user?.role === 'medical' ? 'Medical officer' : 'Astronaut'}
+                {isAdmin ? 'Medical Officer (Admin)' : `${astronaut?.name || 'Astronaut'} (User)`}
               </small>
             </div>
             <button
@@ -699,9 +773,20 @@ export default function App() {
       <main className="main">
         <header className="topbar">
           <div className="crumb">
-            ASTERIA-7 <span>/</span> HEALTH INTELLIGENCE
+            ASTERIA-7 <span>/</span> {isAdmin ? 'CREW INTELLIGENCE' : 'PERSONAL TELEMETRY'}
           </div>
           <div className="top-right">
+            {/* Prominent Dashboard Mode Indicator */}
+            {isAdmin ? (
+              <span className="role-pill admin">
+                <ShieldCheck size={13} /> Admin Console
+              </span>
+            ) : (
+              <span className="role-pill user">
+                <UserCheck size={13} /> Astronaut Console
+              </span>
+            )}
+
             <button
               className="theme-toggle"
               onClick={toggleTheme}
@@ -710,11 +795,13 @@ export default function App() {
               {isLight ? <Moon size={15} /> : <Sun size={15} />}
               <span>{isLight ? 'Dark mode' : 'Light mode'}</span>
             </button>
+
             <div className="live">
               <i /> SYSTEM NOMINAL
             </div>
+
             <div className="avatar small">
-              {user?.role === 'medical' ? 'MO' : 'AS'}
+              {isAdmin ? 'MO' : 'AS'}
             </div>
           </div>
         </header>
@@ -723,50 +810,86 @@ export default function App() {
           <div className="heading-row">
             <div>
               <div className="eyebrow">
-                MISSION DAY 060 <span className="sep">·</span> LOW EARTH ORBIT
+                MISSION DAY 060 <span className="sep">·</span> LOW EARTH ORBIT <span className="sep">·</span>{' '}
+                {isAdmin ? 'FLIGHT SURGEON CONSOLE' : 'ASTRONAUT TELEMETRY'}
               </div>
-              <h1>{tab === 'Overview' ? 'Crew health overview' : tab}</h1>
+              <h1>
+                {tab === 'Overview'
+                  ? isAdmin
+                    ? 'Crew Health Overview'
+                    : 'Personal Health Overview'
+                  : tab}
+                <span className={`role-tag ${isAdmin ? 'admin' : 'user'}`}>
+                  {isAdmin ? 'Admin Dashboard' : `User Dashboard (${astronaut?.name || 'Astronaut'})`}
+                </span>
+              </h1>
               <p className="muted">
-                {tab === 'Cardiovascular'
-                  ? 'Continuous cardiovascular monitoring, hemodynamics, and cardiac adaptation indicators.'
-                  : tab === 'Behavioural'
-                  ? 'Sleep architecture, cognitive stress levels, and daily astronaut subjective logs.'
-                  : 'A unified view of crew health signals, personal baselines, and mission events.'}
+                {isAdmin
+                  ? 'Comprehensive flight surgeon overview across Asteria-7 crew members, baselines, and alerts.'
+                  : `Personal health signals, baseline comparisons, and telemetry for ${astronaut?.name}.`}
               </p>
             </div>
-            <div className="selector">
-              <span>ASTRONAUT</span>
-              <select
-                value={selected || ''}
-                onChange={(e) => setSelected(+e.target.value)}
-              >
-                {astronauts.map((a: Any) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} · {a.call_sign}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={15} />
-            </div>
+
+            {/* ASTRONAUT SELECTOR: ONLY visible for Admin / Medical Officer */}
+            {isAdmin ? (
+              <div className="selector">
+                <span>ASTRONAUT MONITORED</span>
+                <select
+                  value={selected || ''}
+                  onChange={(e) => setSelected(+e.target.value)}
+                >
+                  {astronauts.map((a: Any) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} · {a.call_sign}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={15} />
+              </div>
+            ) : (
+              /* USER DASHBOARD: Static Personal Badge Card with zero access to other crew */
+              <div className="personal-badge-card">
+                <span className="personal-badge-label">LOGGED IN CREW MEMBER</span>
+                <div className="personal-badge-name">
+                  <span className="personal-avatar">
+                    {astronaut?.call_sign?.slice(0, 2) || 'AS'}
+                  </span>
+                  <strong>{astronaut?.name || user?.username}</strong>
+                </div>
+                <div className="personal-badge-callsign">
+                  Call Sign: <b>{astronaut?.call_sign}</b> · Mission: <b>{astronaut?.mission || 'Asteria-7'}</b>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* STATS ROW: Customized between Admin & User */}
           <div className="stats">
             <div className="stat">
               <div className="stat-top">
-                <span>CREW STATUS</span>
+                <span>{isAdmin ? 'CREW MONITORED' : 'MY HEALTH STATUS'}</span>
                 <Users size={17} />
               </div>
               <strong>
-                {astronauts.length.toString().padStart(2, '0')}{' '}
-                <small>astronauts</small>
+                {isAdmin ? (
+                  <>
+                    {astronauts.length.toString().padStart(2, '0')}{' '}
+                    <small>astronauts</small>
+                  </>
+                ) : (
+                  <>
+                    ACTIVE <small>flight ready</small>
+                  </>
+                )}
               </strong>
               <div className="stat-foot">
-                <i /> All crew profiles active
+                <i /> {isAdmin ? 'All crew profiles monitored' : 'Vital telemetry operational'}
               </div>
             </div>
+
             <div className="stat">
               <div className="stat-top">
-                <span>OPEN ALERTS</span>
+                <span>{isAdmin ? 'OPEN ALERTS' : 'MY ACTIVE ALERTS'}</span>
                 <AlertTriangle size={17} />
               </div>
               <strong>
@@ -774,15 +897,16 @@ export default function App() {
                   .filter((a: Any) => !a.acknowledged)
                   .length.toString()
                   .padStart(2, '0')}{' '}
-                <small>require review</small>
+                <small>{isAdmin ? 'require review' : 'personal alerts'}</small>
               </strong>
               <div className="stat-foot amber">
-                Prioritized by deterministic rules
+                {isAdmin ? 'Prioritized across crew' : 'Deterministic threshold check'}
               </div>
             </div>
+
             <div className="stat">
               <div className="stat-top">
-                <span>MEASUREMENTS</span>
+                <span>{isAdmin ? 'OBSERVATIONS' : 'MY BIOMETRICS'}</span>
                 <Activity size={17} />
               </div>
               <strong>
@@ -792,6 +916,7 @@ export default function App() {
                 Across {metrics.length} tracked metrics
               </div>
             </div>
+
             <div className="stat">
               <div className="stat-top">
                 <span>MISSION</span>
@@ -811,7 +936,7 @@ export default function App() {
             </div>
           )}
 
-          {/* DYNAMIC TELEMETRY CARD: Featured on Overview, Cardiovascular, or Behavioural */}
+          {/* DYNAMIC TELEMETRY CARD: Always featured when on Overview, Cardiovascular, or Behavioural */}
           {(tab === 'Overview' ||
             tab === 'Cardiovascular' ||
             tab === 'Behavioural') &&
@@ -824,9 +949,11 @@ export default function App() {
                 <section className="panel alert-panel">
                   <div className="panel-head">
                     <div>
-                      <div className="eyebrow">REQUIRES ATTENTION</div>
+                      <div className="eyebrow">
+                        {isAdmin ? 'CREW ATTENTION REQUIRED' : 'MY ACTIVE HEALTH ALERTS'}
+                      </div>
                       <h2>
-                        Priority alerts{' '}
+                        {isAdmin ? 'Priority alerts' : 'Personal alerts'}{' '}
                         <span className="count">{alerts.length}</span>
                       </h2>
                     </div>
@@ -866,7 +993,7 @@ export default function App() {
                             {a.acknowledged ? 'Acknowledged' : 'Open'}
                           </small>
                         </div>
-                        {user?.role === 'medical' && !a.acknowledged && (
+                        {isAdmin && !a.acknowledged && (
                           <button
                             className="ack"
                             title="Acknowledge and add follow-up"
@@ -895,7 +1022,9 @@ export default function App() {
                 <section className="panel timeline-panel">
                   <div className="panel-head">
                     <div>
-                      <div className="eyebrow">RECENT MISSION EVENTS</div>
+                      <div className="eyebrow">
+                        {isAdmin ? 'RECENT CREW EVENTS' : 'MY MISSION EVENTS'}
+                      </div>
                       <h2>Health timeline</h2>
                     </div>
                     <button
@@ -931,7 +1060,11 @@ export default function App() {
                   <div className="panel-head">
                     <div>
                       <div className="eyebrow">FIVE-DOMAIN MONITORING</div>
-                      <h2>Health domains</h2>
+                      <h2>
+                        {isAdmin
+                          ? `Health domains (${astronaut?.name || 'Selected astronaut'})`
+                          : 'My health domains'}
+                      </h2>
                     </div>
                     <button
                       className="text-button"
@@ -1011,12 +1144,19 @@ export default function App() {
                 </section>
               </div>
 
+              {/* Measurements & Baselines Table integrated into Overview */}
               <div id="measurements-table" style={{ marginTop: '16px' }}>
                 <section className="panel table-panel">
                   <div className="panel-head">
                     <div>
-                      <div className="eyebrow">CREW HEALTH RECORDS</div>
-                      <h2>Measurements & Baselines</h2>
+                      <div className="eyebrow">
+                        {isAdmin ? 'CREW TELEMETRY RECORDS' : 'MY BIOMETRIC RECORDS'}
+                      </div>
+                      <h2>
+                        {isAdmin
+                          ? `Measurements & Baselines · ${astronaut?.name}`
+                          : 'My Measurements & Baselines'}
+                      </h2>
                       <p className="muted">
                         Click any measurement row below to visualize its 60-day adaptive
                         trend graph above.
@@ -1086,7 +1226,11 @@ export default function App() {
                 <div className="panel-head">
                   <div>
                     <div className="eyebrow">CARDIOVASCULAR PROFILE</div>
-                    <h2>Hemodynamic Summary & Baseline Drift</h2>
+                    <h2>
+                      {isAdmin
+                        ? `Hemodynamic Summary & Drift · ${astronaut?.name}`
+                        : 'My Hemodynamic Summary & Drift'}
+                    </h2>
                   </div>
                 </div>
                 <div
@@ -1132,7 +1276,11 @@ export default function App() {
               <div className="panel-head">
                 <div>
                   <div className="eyebrow">ASTRONAUT SELF-REPORT</div>
-                  <h2>Daily health assessment</h2>
+                  <h2>
+                    {isAdmin
+                      ? `Daily health assessment · ${astronaut?.name}`
+                      : 'Log daily health assessment'}
+                  </h2>
                   <p className="muted">
                     Manual assessment values are self-reported, not instrument
                     measurements.
@@ -1222,13 +1370,20 @@ export default function App() {
               <div className="panel-head">
                 <div>
                   <div className="eyebrow">DOCUMENT INTELLIGENCE</div>
-                  <h2>Medical reports</h2>
+                  <h2>
+                    {isAdmin
+                      ? `Medical reports · ${astronaut?.name}`
+                      : 'My medical reports'}
+                  </h2>
                   <p className="muted">
-                    Extracted text remains unverified until reviewed by a medical
-                    officer.
+                    {isAdmin
+                      ? 'Upload clinical PDFs and verify extracted text for crew medical files.'
+                      : 'Extracted clinical text remains unverified until reviewed by a medical officer.'}
                   </p>
                 </div>
-                {user?.role === 'medical' && (
+
+                {/* Upload only available for Medical Officers / Admins */}
+                {isAdmin && (
                   <label className="upload-btn">
                     <Upload size={15} /> Upload PDF
                     <input
@@ -1251,6 +1406,7 @@ export default function App() {
                   </label>
                 )}
               </div>
+
               {docs.map((d: Any) => (
                 <div className="doc-card" key={d.id}>
                   <FileText size={19} />
@@ -1264,7 +1420,7 @@ export default function App() {
                     </p>
                     <pre>{d.extracted_text}</pre>
                   </div>
-                  {user?.role === 'medical' && !d.verified && (
+                  {isAdmin && !d.verified && (
                     <button
                       className="ack"
                       onClick={async () => {
@@ -1291,8 +1447,16 @@ export default function App() {
                   <Atom />
                 </div>
                 <div>
-                  <div className="eyebrow">EVIDENCE-GROUNDED ASSISTANT</div>
-                  <h2>Ask about mission health</h2>
+                  <div className="eyebrow">
+                    {isAdmin
+                      ? 'FLIGHT SURGEON AI ASSISTANT'
+                      : 'CREW PERSONAL HEALTH ASSISTANT'}
+                  </div>
+                  <h2>
+                    {isAdmin
+                      ? `Ask about ${astronaut?.name}'s health signals`
+                      : 'Ask about your mission health'}
+                  </h2>
                   <p>
                     Answers use available records. Interpretations are not
                     diagnoses.
