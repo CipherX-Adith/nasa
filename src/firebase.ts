@@ -452,8 +452,6 @@ export async function streamTelemetryToFirebase(astronautId: number, measurement
   };
 
   try {
-    const newRef = rtdbPush(rtdbRef(rtdb, `measurements/${astronautId}`));
-    await rtdbSet(newRef, payload);
     const liveRef = rtdbRef(rtdb, `telemetry/${astronautId}`);
     await rtdbSet(liveRef, payload);
   } catch {}

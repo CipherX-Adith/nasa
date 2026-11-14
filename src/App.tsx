@@ -678,7 +678,19 @@ export default function App() {
         }
 
         if (tickData && tickData.value !== undefined) {
-          setMeasurements((prev) => [...prev, tickData]);
+          setMeasurements((prev) => {
+            let lastIdx = -1;
+            for (let i = prev.length - 1; i >= 0; i--) {
+              if (prev[i]?.metric === 'Resting heart rate') {
+                lastIdx = i;
+                break;
+              }
+            }
+            if (lastIdx === -1) return [...prev, tickData];
+            const updated = [...prev];
+            updated[lastIdx] = { ...updated[lastIdx], value: tickData.value };
+            return updated;
+          });
           setPacketCount((c) => c + 1);
           setLastSyncTime(new Date());
 

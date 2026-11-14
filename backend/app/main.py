@@ -686,36 +686,28 @@ def live_telemetry_tick(aid: int, db: Session = Depends(get_db), user = Depends(
     a = db.get(Astronaut, aid)
     if not a:
         raise HTTPException(404, "Astronaut not found")
-    latest_hr = db.query(Measurement).filter_by(astronaut_id=aid, metric="Resting heart rate").order_by(Measurement.timestamp.desc()).first()
-    cur_hr = latest_hr.value if latest_hr else 72.0
-    new_hr = round(max(55.0, min(120.0, cur_hr + random.uniform(-0.8, 0.8))), 1)
-    x = Measurement(
-        astronaut_id=aid,
-        domain="cardiovascular",
-        metric="Resting heart rate",
-        value=new_hr,
-        unit="bpm",
-        timestamp=datetime.now(timezone.utc),
-        source="Live telemetry downlink",
-        simulated=False
-    )
-    db.add(x)
-    db.commit()
-    db.refresh(x)
-    fb_request(f"measurements/{aid}/{x.id}", {
-        "id": x.id,
-        "astronaut_id": x.astronaut_id,
-        "domain": x.domain,
-        "metric": x.metric,
-        "value": x.value,
-        "unit": x.unit,
-        "timestamp": x.timestamp.isoformat(),
-        "source": x.source,
+    
+    # Base target HR: Maya Chen at Day 60 is elevated (~84.0 bpm), others nominal (~68.0 bpm)
+    target_base = 84.0 if aid == 1 else 68.0
+    jitter = round(random.uniform(-1.2, 1.2), 1)
+    new_hr = round(target_base + jitter, 1)
+
+    payload = {
+        "id": int(datetime.now(timezone.utc).timestamp() * 1000),
+        "astronaut_id": aid,
+        "domain": "cardiovascular",
+        "metric": "Resting heart rate",
+        "value": new_hr,
+        "unit": "bpm",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": "Live telemetry downlink",
         "quality": "good",
-        "simulated": False,
-    }, method="PUT")
-    refresh_alerts(db)
-    return serialize(x)
+        "simulated": False
+    }
+
+    # Broadcast to live telemetry socket node without polluting 60-day historical table
+    fb_request(f"telemetry/{aid}", payload, method="PUT")
+    return payload
 
 @app.get("/api/astronauts/{aid}/baselines")
 def baselines(aid: int, db: Session = Depends(get_db), user = Depends(current_user)):
