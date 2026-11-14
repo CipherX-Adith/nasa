@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock3,
+  Droplets,
   FilePlus,
   FileText,
   Heart,
@@ -2188,15 +2189,19 @@ export default function App() {
         <div className="glass-biometrics-bar">
           <div className="glass-brand-block">
             <div className="glass-brand-logo">
-              <Sparkles size={18} color="#0d9488" /> OrbitCare
+              <span className="cly-rainbow-icon">
+                <Sparkles size={20} />
+              </span>{' '}
+              ClyHealth
             </div>
             <div className="glass-crumb">
-              <span>/</span> System Reports <span>/</span> Physiological Risk & Digital Twin
+              <span>🏠</span> <span>/</span> System Reports <span>Methylation risk score</span>
             </div>
           </div>
 
           <div className="glass-biometrics-pills">
             <div className="bio-pill">
+              <span className="bio-pill-indicator blue-ind" />
               <span className="bio-pill-label">Biological age</span>
               <span className="bio-pill-value">
                 47 <span className="bio-pill-unit">yrs</span>
@@ -2204,6 +2209,7 @@ export default function App() {
             </div>
 
             <div className="bio-pill">
+              <span className="bio-pill-indicator gray-ind" />
               <span className="bio-pill-label">Chronological age</span>
               <span className="bio-pill-value">
                 42 <span className="bio-pill-unit">yrs</span>
@@ -2211,6 +2217,7 @@ export default function App() {
             </div>
 
             <div className="bio-pill">
+              <span className="bio-pill-indicator blue-ind" />
               <span className="bio-pill-label">Sex</span>
               <span className="bio-pill-value">
                 {astronaut?.call_sign?.includes('2') ? 'Female ♀' : 'Male ♂'}
@@ -2218,62 +2225,67 @@ export default function App() {
             </div>
 
             <div className="bio-pill">
-              <span className="bio-pill-label">Body Mass</span>
+              <span className="bio-pill-indicator blue-ind" />
+              <span className="bio-pill-label">Weight</span>
               <span className="bio-pill-value">
-                74.5 <span className="bio-pill-unit">kg</span>
-                <span className="bio-pill-delta">▲ +1.2 kg</span>
+                97.5 <span className="bio-pill-delta">▲ +1.5 kg</span>
               </span>
             </div>
 
-            <div className="glass-aging-alert-pill" title="Microgravity cardiovascular baseline shift">
-              <span>⚠️ Cardiovascular drift:</span>
-              <strong>+18.5% above baseline</strong>
+            <div className="glass-aging-alert-pill" title="Microgravity & epigenetic aging drift">
+              <span>Your body is aging <strong style={{ color: '#ef4444' }}>5 years</strong> faster than your chronological age.</span>
             </div>
           </div>
         </div>
 
         {/* Two-Column Master Grid: Left: Risk Cards & Reduced Graph; Right: Digital Twin Body */}
         <div className="digital-twin-layout">
-          {/* Left Column: Risk Score, Contributing Factors, Reduced Graph & Domain Risk Cards */}
+          {/* Left Column: Risk Score, Contributing Factors, Domain Risk Cards & Reduced Graph */}
           <div className="twin-left-col">
             {/* Top Row: Risk Score + Why The Risk? */}
             <div className="risk-cards-grid">
-              {/* Card 1: Methylation / Spaceflight Risk Score */}
+              {/* Card 1: Methylation Risk Score */}
               <div className="glass-panel-card">
                 <div className="glass-panel-head">
-                  <h4 className="glass-panel-title">Physiological Risk Score</h4>
+                  <h4 className="glass-panel-title">Methylation Risk Score</h4>
                   <span className="risk-level-tag moderate">● Moderate Risk</span>
                 </div>
 
                 <div className="risk-score-display">
                   <div className="risk-big-score">
-                    0.74% <small>/ 45 Actual age</small>
-                  </div>
-                  <div style={{ textAlign: 'right', font: '600 11px sans-serif', color: 'var(--text-muted)' }}>
-                    Risk Index: <b>74/100</b>
+                    0.76 <span className="score-percent-sign">%</span> <small>/ 45 Actual age</small>
                   </div>
                 </div>
 
                 {/* Gradient Risk Bar with Needle Pin */}
                 <div className="risk-gradient-track">
-                  <div className="risk-needle-pin" style={{ left: '74%' }} title="Current Risk Level: 74%" />
+                  <div className="risk-needle-pin" style={{ left: '76%' }} title="Current Risk Level: 76%" />
                 </div>
 
                 <div className="risk-range-labels">
-                  <span>0 (Low)</span>
+                  <span>0</span>
                   <span>30</span>
-                  <span>100 (High)</span>
                 </div>
 
+                <div className="risk-score-subhead">Risk Score</div>
                 <p className="risk-narrative-text">
-                  {astronaut?.name || 'Astronaut'} exhibits elevated cardiovascular drift and sleep disruption under microgravity conditions, placing mission readiness in the moderate monitoring bracket.
+                  You have an 18.4% risk of a cardiovascular event in 10 years, placing you in the moderate risk category for your age and gen...
                 </p>
 
-                <div className="risk-areas-row">
-                  <span className="risk-area-pill critical">● Tachycardia Drift</span>
-                  <span className="risk-area-pill critical">● Blood Pressure</span>
-                  <span className="risk-area-pill warning">● Sleep Debt</span>
-                  <span className="risk-area-pill nominal">● Bone Density</span>
+                <div className="areas-concern-box">
+                  <div className="areas-concern-head">
+                    <span className="concern-label">Areas of Concern</span>
+                    <div className="concern-legend">
+                      <span><span className="legend-indicator low" /> Low</span>
+                      <span><span className="legend-indicator med" /> Medium</span>
+                      <span><span className="legend-indicator high" /> High</span>
+                    </div>
+                  </div>
+                  <div className="risk-areas-row">
+                    <span className="risk-area-pill high"><span className="legend-indicator high" /> Atrial Fibrillation</span>
+                    <span className="risk-area-pill high"><span className="legend-indicator high" /> Pulmonary Embolism</span>
+                    <span className="risk-area-pill med"><span className="legend-indicator med" /> Hypertension</span>
+                  </div>
                 </div>
               </div>
 
@@ -2283,51 +2295,167 @@ export default function App() {
                   <h4 className="glass-panel-title">Why The Risk?</h4>
                   <button
                     type="button"
-                    className="glass-panel-link-btn"
+                    className="twin-view-all-btn"
                     onClick={() => handleTabChange('Medical records')}
                   >
-                    View records
+                    View all data
                   </button>
                 </div>
 
-                <div className="contributing-factors-list">
-                  <div className="factor-item">
-                    <span className="factor-bullet red" />
-                    <div>
-                      <div className="factor-title-row">
-                        <span className="factor-name">Elevated Resting HR</span>
-                        <span className="factor-val">{liveVitals.heartRate.toFixed(1)} BPM</span>
-                      </div>
-                      <div className="factor-desc">Increases cardiac load and autonomic sympathetic baseline drift under LEO.</div>
+                <p className="why-risk-subtext">The score is primarily influenced by:</p>
+
+                <div className="cly-factors-list">
+                  {/* Factor 1: LDL */}
+                  <div className="cly-factor-card">
+                    <div className="cly-factor-title">Elevated LDL Cholesterol</div>
+                    <div className="cly-factor-val-line">
+                      <span className="cly-val-dot orange" />
+                      <span className="cly-val-number">145</span>
+                      <span className="cly-val-unit">mg/dL</span>
+                    </div>
+                    <div className="cly-factor-note">
+                      <span className="cly-note-line amber" /> Increases plaque buildup in arteries
                     </div>
                   </div>
 
-                  <div className="factor-item">
-                    <span className="factor-bullet amber" />
-                    <div>
-                      <div className="factor-title-row">
-                        <span className="factor-name">Cephalad Blood Pressure</span>
-                        <span className="factor-val">{liveVitals.systolicBp.toFixed(0)}/85 mmHg</span>
-                      </div>
-                      <div className="factor-desc">Microgravity headward fluid redistribution creates vascular tension.</div>
+                  {/* Factor 2: High Blood Pressure */}
+                  <div className="cly-factor-card">
+                    <div className="cly-factor-title">High Blood Pressure</div>
+                    <div className="cly-factor-val-line">
+                      <span className="cly-val-dot red" />
+                      <span className="cly-val-number">130/85</span>
+                      <span className="cly-val-unit">mmHg</span>
+                    </div>
+                    <div className="cly-factor-note">
+                      <span className="cly-note-line red" /> Puts extra strain on the heart and blood vessels
                     </div>
                   </div>
 
-                  <div className="factor-item">
-                    <span className="factor-bullet amber" />
-                    <div>
-                      <div className="factor-title-row">
-                        <span className="factor-name">Sleep & Circadian Disruption</span>
-                        <span className="factor-val">{liveVitals.sleepHours.toFixed(1)} hrs/night</span>
+                  {/* Factors 3 & 4 Dual Row */}
+                  <div className="cly-dual-factors">
+                    <div className="cly-dual-item">
+                      <div className="cly-dual-title">Sedentary Lifestyle</div>
+                      <div className="cly-dual-note">
+                        <span className="cly-note-line amber" /> Increases cholesterol & BP
                       </div>
-                      <div className="factor-desc">Elevates operational fatigue ({liveVitals.fatigue}/10) and neurocognitive strain.</div>
+                    </div>
+                    <div className="cly-dual-item">
+                      <div className="cly-dual-title">Heart disease in family</div>
+                      <div className="cly-dual-note">
+                        <span className="cly-note-line amber" /> Increases baseline risk
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Middle Row: Reduced-Width Telemetry Trend Graph */}
+            {/* Epigenetic Disease Risk Profile 3-Card Row */}
+            <div className="epigenetic-profile-block">
+              <h4 className="epigenetic-heading">Epigenetic Disease Risk Profile</h4>
+              <div className="domain-risk-profile-grid">
+                {/* Card 1: T2 Diabetes */}
+                <div
+                  className={`domain-risk-card ${selectedOrgan === 'immune' ? 'active' : ''}`}
+                  onClick={() => handleSelectOrgan('immune')}
+                >
+                  <div>
+                    <div className="domain-risk-card-head">
+                      <span className="domain-risk-title">
+                        <Droplets size={14} color="#0284c7" /> T2 Diabetes
+                      </span>
+                      <span className="domain-risk-pill suboptimal">Suboptimal</span>
+                    </div>
+                    <div className="domain-risk-percentile">
+                      <div className="percentile-label">Polygenic risk score</div>
+                      <div className="percentile-val">44th percentile</div>
+                    </div>
+                    <div className="cly-markers-box">
+                      <span className="markers-label">Genetic markers</span>
+                      <div className="markers-chips">
+                        <span><span className="marker-dot" /> TCF7L2</span>
+                        <span><span className="marker-dot" /> PPARG</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="cly-action-pill-box">
+                    <span className="cly-action-emoji">🏃</span>
+                    <div>
+                      <div className="cly-action-name">Exercise</div>
+                      <div className="cly-action-desc">Do ≥150 min moderate aerobic exercise/week (e.g...</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 2: Alzheimer's */}
+                <div
+                  className={`domain-risk-card ${selectedOrgan === 'brain' ? 'active' : ''}`}
+                  onClick={() => handleSelectOrgan('brain')}
+                >
+                  <div>
+                    <div className="domain-risk-card-head">
+                      <span className="domain-risk-title">
+                        <Brain size={14} color="#0d9488" /> Alzheimer's
+                      </span>
+                      <span className="domain-risk-pill optimal">Optimal</span>
+                    </div>
+                    <div className="domain-risk-percentile">
+                      <div className="percentile-label">Polygenic risk score</div>
+                      <div className="percentile-val">12th percentile</div>
+                    </div>
+                    <div className="cly-markers-box">
+                      <span className="markers-label">Genetic markers</span>
+                      <div className="markers-chips">
+                        <span><span className="marker-dot teal" /> APOE</span>
+                        <span><span className="marker-dot teal" /> PSEN1</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="cly-action-pill-box">
+                    <span className="cly-action-emoji">💊</span>
+                    <div>
+                      <div className="cly-action-name">Omega-3 Fatty Acids</div>
+                      <div className="cly-action-desc">Focus on a heart-healthy diet to boost HDL and sup...</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 3: Cardiovascular */}
+                <div
+                  className={`domain-risk-card ${selectedOrgan === 'heart' ? 'active' : ''}`}
+                  onClick={() => handleSelectOrgan('heart')}
+                >
+                  <div>
+                    <div className="domain-risk-card-head">
+                      <span className="domain-risk-title">
+                        <Activity size={14} color="#ef4444" /> Cardiovascular
+                      </span>
+                      <span className="domain-risk-pill critical">Critical</span>
+                    </div>
+                    <div className="domain-risk-percentile">
+                      <div className="percentile-label">Polygenic risk score</div>
+                      <div className="percentile-val">91st percentile</div>
+                    </div>
+                    <div className="cly-markers-box">
+                      <span className="markers-label">Genetic markers</span>
+                      <div className="markers-chips">
+                        <span><span className="marker-dot red" /> TCF7L2</span>
+                        <span><span className="marker-dot red" /> cg18064256</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="cly-action-pill-box">
+                    <span className="cly-action-emoji">🩺</span>
+                    <div>
+                      <div className="cly-action-name">Monitor your blood pressu...</div>
+                      <div className="cly-action-desc">Your BP is slightly high (135/75). Follow the report r...</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Integrated Organ Telemetry Trend Graph */}
             <div className="reduced-telemetry-container">
               <div className="reduced-telemetry-header">
                 <div className="reduced-telemetry-title-block">
@@ -2431,75 +2559,6 @@ export default function App() {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Bottom Row: 3 Epigenetic / Physiological Disease Risk Profile Cards */}
-            <div className="domain-risk-profile-grid">
-              {/* Card 1: Metabolic & Fluid */}
-              <div
-                className={`domain-risk-card ${selectedOrgan === 'immune' ? 'active' : ''}`}
-                onClick={() => handleSelectOrgan('immune')}
-              >
-                <div>
-                  <div className="domain-risk-card-head">
-                    <span className="domain-risk-title">
-                      <Shield size={14} color="#f59e0b" /> Fluid & Metabolic
-                    </span>
-                    <span className="domain-risk-pill suboptimal">Suboptimal</span>
-                  </div>
-                  <div className="domain-risk-percentile">
-                    <div className="percentile-label">Physiological Load</div>
-                    <div className="percentile-val">44th percentile</div>
-                  </div>
-                </div>
-                <div className="domain-countermeasure-action">
-                  <span><strong>Hydration:</strong> 2.5L oral electrolyte loading</span>
-                </div>
-              </div>
-
-              {/* Card 2: Neurocognitive & Sleep */}
-              <div
-                className={`domain-risk-card ${selectedOrgan === 'brain' ? 'active' : ''}`}
-                onClick={() => handleSelectOrgan('brain')}
-              >
-                <div>
-                  <div className="domain-risk-card-head">
-                    <span className="domain-risk-title">
-                      <Brain size={14} color="#8b5cf6" /> Neurocognitive
-                    </span>
-                    <span className="domain-risk-pill suboptimal">Fatigue 7/10</span>
-                  </div>
-                  <div className="domain-risk-percentile">
-                    <div className="percentile-label">Circadian Quality</div>
-                    <div className="percentile-val">12th percentile</div>
-                  </div>
-                </div>
-                <div className="domain-countermeasure-action">
-                  <span><strong>Circadian:</strong> 45 min 480nm LED phase shift</span>
-                </div>
-              </div>
-
-              {/* Card 3: Cardiovascular */}
-              <div
-                className={`domain-risk-card ${selectedOrgan === 'heart' ? 'active' : ''}`}
-                onClick={() => handleSelectOrgan('heart')}
-              >
-                <div>
-                  <div className="domain-risk-card-head">
-                    <span className="domain-risk-title">
-                      <Heart size={14} color="#ef4444" /> Cardiovascular
-                    </span>
-                    <span className="domain-risk-pill critical">Critical</span>
-                  </div>
-                  <div className="domain-risk-percentile">
-                    <div className="percentile-label">Cardiovascular Drift</div>
-                    <div className="percentile-val">91st percentile</div>
-                  </div>
-                </div>
-                <div className="domain-countermeasure-action">
-                  <span><strong>Exercise:</strong> 45 min ARED + Ergometer</span>
-                </div>
               </div>
             </div>
           </div>

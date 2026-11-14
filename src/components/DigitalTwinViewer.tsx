@@ -5,10 +5,10 @@ import {
   Brain,
   Activity,
   Shield,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
   Sparkles,
+  Plus,
+  Minus,
+  Maximize2,
   Info,
 } from 'lucide-react';
 
@@ -125,46 +125,55 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
   };
 
   const active = organData[selectedOrgan];
+  const signalCount = Object.values(vitals).filter((value) => Number.isFinite(value)).length;
+  const systemCards: OrganKey[] = ['heart', 'lungs', 'muscles', 'brain'];
 
   return (
     <div className="digital-twin-card">
       <div className="digital-twin-head">
         <div>
-          <div className="digital-twin-badge">
-            <Sparkles size={13} className="sparkle-icon" /> DIGITAL TWIN · ASTERIA-7
-          </div>
-          <h3 className="digital-twin-title">Your Digital Twin Overview</h3>
+          <div className="digital-twin-badge">INTERACTIVE ANATOMY · SIMULATED MODEL</div>
+          <h3 className="digital-twin-title">Mission health map</h3>
           <p className="digital-twin-subtitle">
-            A personalized physiological model mapping real-time telemetry, organ adaptation, and flight risk.
+            Select a highlighted system to review its available measurements. This illustration is not a diagnostic model.
           </p>
         </div>
-        <div className="digital-twin-actions">
-          <button
-            type="button"
-            className="twin-icon-btn"
-            onClick={() => setZoom((z) => Math.min(z + 0.15, 1.4))}
-            title="Zoom in body model"
-          >
-            <ZoomIn size={14} />
-          </button>
-          <button
-            type="button"
-            className="twin-icon-btn"
-            onClick={() => setZoom((z) => Math.max(z - 0.15, 0.85))}
-            title="Zoom out body model"
-          >
-            <ZoomOut size={14} />
-          </button>
-          <button
-            type="button"
-            className="twin-icon-btn"
-            onClick={() => setZoom(1)}
-            title="Reset zoom"
-          >
-            <RotateCcw size={14} />
-          </button>
-        </div>
+        <button
+          type="button"
+          className="twin-view-all-btn"
+          onClick={() => onSelectOrgan('heart')}
+        >
+          View all data
+        </button>
       </div>
+
+      <div className="twin-anatomy-layout">
+        <div className="twin-system-list" aria-label="Health systems">
+          {systemCards.map((key) => {
+            const item = organData[key];
+            const Icon = item.icon;
+            return (
+              <button
+                key={key}
+                type="button"
+                className={`twin-system-card ${selectedOrgan === key ? 'active' : ''}`}
+                onClick={() => onSelectOrgan(key)}
+                style={{ '--system-color': item.color, '--system-bg': item.bg } as React.CSSProperties}
+              >
+                <span className="twin-system-icon"><Icon size={16} /></span>
+                <span className="twin-system-copy">
+                  <strong>{key === 'brain' ? 'Mental' : key === 'muscles' ? 'Muscles' : key === 'heart' ? 'Heart' : 'Lungs'}</strong>
+                  <small>{item.value}</small>
+                  <em>{item.status}</em>
+                </span>
+              </button>
+            );
+          })}
+          <div className="twin-signal-coverage">
+            <span className="coverage-ring" aria-hidden="true">{signalCount}<small>/10</small></span>
+            <span><strong>Signals present</strong><small>Available measurements</small></span>
+          </div>
+        </div>
 
       {/* Anatomical Holographic Body Container */}
       <div className="anatomical-viewport">
@@ -201,16 +210,23 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
 
               {/* Shading gradients for 3D body volume */}
               <linearGradient id="body-glass-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="rgba(215, 235, 250, 0.85)" />
-                <stop offset="50%" stopColor="rgba(180, 210, 235, 0.65)" />
-                <stop offset="100%" stopColor="rgba(145, 185, 220, 0.5)" />
+                <stop offset="0%" stopColor="#8be9ff" stopOpacity="0.96" />
+                <stop offset="26%" stopColor="#388bff" stopOpacity="0.9" />
+                <stop offset="58%" stopColor="#2949c9" stopOpacity="0.82" />
+                <stop offset="100%" stopColor="#172554" stopOpacity="0.72" />
               </linearGradient>
 
               <linearGradient id="body-contour-stroke" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(255, 255, 255, 0.95)" />
-                <stop offset="35%" stopColor="rgba(56, 189, 248, 0.7)" />
-                <stop offset="70%" stopColor="rgba(13, 148, 136, 0.5)" />
-                <stop offset="100%" stopColor="rgba(255, 255, 255, 0.8)" />
+                <stop offset="0%" stopColor="#e0fbff" />
+                <stop offset="38%" stopColor="#38bdf8" />
+                <stop offset="72%" stopColor="#818cf8" />
+                <stop offset="100%" stopColor="#67e8f9" />
+              </linearGradient>
+
+              <linearGradient id="muscle-shade-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#c4b5fd" stopOpacity="0.56" />
+                <stop offset="48%" stopColor="#60a5fa" stopOpacity="0.24" />
+                <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.04" />
               </linearGradient>
 
               {/* Internal organs gradients */}
@@ -304,54 +320,130 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
                 filter="drop-shadow(0 10px 18px rgba(10, 40, 80, 0.08))"
               />
 
-              {/* Skeletal Spine & Ribcage lines */}
-              <g opacity="0.32" stroke="rgba(255, 255, 255, 0.9)" strokeWidth="1.2" fill="none">
-                {/* Spine */}
-                <line x1="190" y1="110" x2="190" y2="350" strokeWidth="2" strokeDasharray="5,2" />
-                {/* Rib Arches */}
-                <path d="M 170,165 Q 190,172 210,165" />
-                <path d="M 160,185 Q 190,195 220,185" />
-                <path d="M 155,208 Q 190,220 225,208" />
-                <path d="M 152,230 Q 190,245 228,230" />
-                <path d="M 154,252 Q 190,268 226,252" />
-                {/* Pelvic girdle */}
-                <path d="M 155,335 Q 190,360 225,335" strokeWidth="1.8" />
+              {/* Soft muscle contours add the luminous anatomical depth shown in the reference. */}
+              <g className="body-muscle-highlights" fill="url(#muscle-shade-grad)" stroke="#bfdbfe" strokeOpacity="0.3" strokeWidth="1.1">
+                <path d="M 176,126 C 160,128 145,140 136,155 C 147,164 164,166 183,158 L 188,146 Z" />
+                <path d="M 204,126 C 220,128 235,140 244,155 C 233,164 216,166 197,158 L 192,146 Z" />
+                <path d="M 182,164 C 166,160 148,166 139,178 C 147,190 164,195 184,190 Z" />
+                <path d="M 198,164 C 214,160 232,166 241,178 C 233,190 216,195 196,190 Z" />
+                <path d="M 184,202 C 169,198 153,204 148,216 C 157,225 171,228 186,224 Z" />
+                <path d="M 196,202 C 211,198 227,204 232,216 C 223,225 209,228 194,224 Z" />
+                <path d="M 186,232 C 174,228 163,233 162,244 C 170,251 178,252 187,249 Z" />
+                <path d="M 194,232 C 206,228 217,233 218,244 C 210,251 202,252 193,249 Z" />
+                <path d="M 114,174 C 104,195 99,222 94,246 C 100,251 108,248 112,239 L 126,189 Z" />
+                <path d="M 266,174 C 276,195 281,222 286,246 C 280,251 272,248 268,239 L 254,189 Z" />
+                <path d="M 149,390 C 143,425 149,461 158,484 C 164,489 171,486 174,478 L 183,394 Z" />
+                <path d="M 231,390 C 237,425 231,461 222,484 C 216,489 209,486 206,478 L 197,394 Z" />
+                <path d="M 153,501 C 150,531 151,558 153,580 C 159,587 166,585 169,578 L 172,502 Z" />
+                <path d="M 227,501 C 230,531 229,558 227,580 C 221,587 214,585 211,578 L 208,502 Z" />
               </g>
 
-              {/* Major Circulatory Vascular Tree (Red/Blue Glowing Vessels) */}
-              <g opacity="0.55" fill="none" strokeWidth="1">
-                {/* Aortic Arch & Descending Aorta */}
+              {/* SKELETAL SYSTEM: Clavicles, Sternum, Ribcage, Spine, Pelvis, and Long Bones */}
+              <g className="anatomical-skeleton-group" fill="none">
+                {/* Clavicle Collarbones */}
                 <path
-                  d="M 195,195 C 190,178 185,170 190,160 C 194,152 198,135 198,115"
-                  stroke="#ef4444"
-                  strokeWidth="1.8"
+                  d="M 186,142 C 166,137 142,143 126,152 M 194,142 C 214,137 238,143 254,152"
+                  stroke="rgba(255, 255, 255, 0.85)"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                />
+
+                {/* Sternum / Breastbone */}
+                <path
+                  d="M 186,144 L 194,144 L 193,228 L 187,228 Z"
+                  fill="rgba(255, 255, 255, 0.3)"
+                  stroke="rgba(255, 255, 255, 0.9)"
+                  strokeWidth="1.2"
+                />
+                <circle cx="190" cy="233" r="2.2" fill="rgba(255, 255, 255, 0.85)" />
+
+                {/* 10 Pairs of Anatomically Curved Ribs */}
+                <g stroke="rgba(255, 255, 255, 0.72)" strokeWidth="1.3">
+                  {/* Left Thoracic Ribs */}
+                  <path d="M 187,156 C 164,150 144,158 136,172 C 144,178 170,166 187,162" />
+                  <path d="M 187,170 C 156,165 134,176 128,192 C 136,198 166,184 187,178" />
+                  <path d="M 187,184 C 150,180 126,194 120,212 C 130,220 162,202 187,194" />
+                  <path d="M 188,198 C 146,195 122,212 116,234 C 128,242 162,220 188,210" />
+                  <path d="M 188,212 C 143,210 120,230 114,252 C 126,260 162,236 188,226" />
+                  <path d="M 188,226 C 143,226 120,248 116,270 C 128,276 163,252 188,240" />
+                  <path d="M 189,240 C 146,242 124,266 120,288 C 132,294 165,268 189,254" />
+                  <path d="M 189,252 C 150,258 130,280 126,302 C 138,306 167,284 189,266" />
+                  <path d="M 189,264 C 156,272 136,294 134,314 C 144,316 169,296 189,278" />
+                  <path d="M 190,276 C 162,284 144,306 142,324 C 152,326 172,306 190,288" />
+
+                  {/* Right Thoracic Ribs */}
+                  <path d="M 193,156 C 216,150 236,158 244,172 C 236,178 210,166 193,162" />
+                  <path d="M 193,170 C 224,165 246,176 252,192 C 244,198 214,184 193,178" />
+                  <path d="M 193,184 C 230,180 254,194 260,212 C 250,220 218,202 193,194" />
+                  <path d="M 192,198 C 234,195 258,212 264,234 C 252,242 218,220 192,210" />
+                  <path d="M 192,212 C 237,210 260,230 266,252 C 254,260 218,236 192,226" />
+                  <path d="M 192,226 C 237,226 260,248 264,270 C 252,276 217,252 192,240" />
+                  <path d="M 191,240 C 234,242 256,266 260,288 C 248,294 215,268 191,254" />
+                  <path d="M 191,252 C 230,258 250,280 254,302 C 242,306 213,284 191,266" />
+                  <path d="M 191,264 C 224,272 244,294 246,314 C 236,316 211,296 191,278" />
+                  <path d="M 190,276 C 218,284 236,306 238,324 C 228,326 208,306 190,288" />
+                </g>
+
+                {/* Vertebral Spinal Column (Cervical, Thoracic & Lumbar Discs) */}
+                <line x1="190" y1="108" x2="190" y2="350" stroke="rgba(255, 255, 255, 0.85)" strokeWidth="2.8" />
+                <g stroke="rgba(255, 255, 255, 0.65)" strokeWidth="1.2">
+                  {[116, 126, 136, 146, 156, 166, 176, 186, 196, 206, 216, 226, 236, 246, 256, 266, 276, 286, 296, 306, 316, 326, 336, 346].map((y) => (
+                    <line key={y} x1="186" y1={y} x2="194" y2={y} />
+                  ))}
+                </g>
+
+                {/* Pelvic Girdle & Iliac Crests */}
+                <path
+                  d="M 154,335 C 138,345 140,370 156,380 C 172,388 186,376 188,364"
+                  stroke="rgba(255, 255, 255, 0.8)"
+                  strokeWidth="2"
                 />
                 <path
-                  d="M 192,215 L 190,330 C 190,350 178,390 170,440 L 165,540"
-                  stroke="#ef4444"
-                  strokeWidth="1.5"
+                  d="M 226,335 C 242,345 240,370 224,380 C 208,388 194,376 192,364"
+                  stroke="rgba(255, 255, 255, 0.8)"
+                  strokeWidth="2"
                 />
-                <path
-                  d="M 190,330 C 190,350 202,390 210,440 L 215,540"
-                  stroke="#ef4444"
-                  strokeWidth="1.5"
-                />
-                {/* Vena Cava / Pulmonary Return */}
-                <path
-                  d="M 184,195 L 184,130"
-                  stroke="#38bdf8"
-                  strokeWidth="1.6"
-                />
-                <path
-                  d="M 184,215 L 186,330 C 186,350 174,390 166,440 L 161,540"
-                  stroke="#38bdf8"
-                  strokeWidth="1.3"
-                />
-                <path
-                  d="M 186,330 C 186,350 198,390 206,440 L 211,540"
-                  stroke="#38bdf8"
-                  strokeWidth="1.3"
-                />
+                <ellipse cx="190" cy="370" rx="14" ry="18" stroke="rgba(255, 255, 255, 0.45)" strokeWidth="1.2" />
+
+                {/* Limb Bones: Arms & Legs */}
+                <g stroke="rgba(255, 255, 255, 0.55)">
+                  {/* Left Arm Humerus, Radius & Ulna */}
+                  <line x1="116" y1="168" x2="96" y2="248" strokeWidth="2.4" />
+                  <circle cx="96" cy="251" r="3.5" fill="none" strokeWidth="1.2" />
+                  <line x1="94" y1="256" x2="78" y2="335" strokeWidth="1.6" />
+                  <line x1="97" y1="256" x2="82" y2="335" strokeWidth="1.2" />
+
+                  {/* Right Arm Humerus, Radius & Ulna */}
+                  <line x1="264" y1="168" x2="284" y2="248" strokeWidth="2.4" />
+                  <circle cx="284" cy="251" r="3.5" fill="none" strokeWidth="1.2" />
+                  <line x1="286" y1="256" x2="302" y2="335" strokeWidth="1.6" />
+                  <line x1="283" y1="256" x2="298" y2="335" strokeWidth="1.2" />
+
+                  {/* Left Leg Femur, Patella & Tibia */}
+                  <line x1="172" y1="388" x2="166" y2="485" strokeWidth="3" />
+                  <circle cx="166" cy="492" r="4.5" fill="none" strokeWidth="1.4" />
+                  <line x1="166" y1="500" x2="164" y2="575" strokeWidth="2.2" />
+
+                  {/* Right Leg Femur, Patella & Tibia */}
+                  <line x1="208" y1="388" x2="214" y2="485" strokeWidth="3" />
+                  <circle cx="214" cy="492" r="4.5" fill="none" strokeWidth="1.4" />
+                  <line x1="214" y1="500" x2="216" y2="575" strokeWidth="2.2" />
+                </g>
+              </g>
+
+              {/* Neural & Circulatory Plexus (Fine luminous branches) */}
+              <g opacity="0.65" fill="none">
+                {/* Neural Plexus radiating down arms */}
+                <path d="M 182,125 C 160,135 140,152 120,178 C 105,198 94,240 84,295" stroke="rgba(251, 191, 36, 0.55)" strokeWidth="1.1" />
+                <path d="M 198,125 C 220,135 240,152 260,178 C 275,198 286,240 296,295" stroke="rgba(251, 191, 36, 0.55)" strokeWidth="1.1" />
+
+                {/* Major Circulatory Arteries & Veins */}
+                <path d="M 195,195 C 190,178 185,170 190,160 C 194,152 198,135 198,115" stroke="#ef4444" strokeWidth="2.2" />
+                <path d="M 192,215 L 190,330 C 190,350 178,390 170,440 L 165,540" stroke="#ef4444" strokeWidth="1.8" />
+                <path d="M 190,330 C 190,350 202,390 210,440 L 215,540" stroke="#ef4444" strokeWidth="1.8" />
+                <path d="M 184,195 L 184,130" stroke="#38bdf8" strokeWidth="1.8" />
+                <path d="M 184,215 L 186,330 C 186,350 174,390 166,440 L 161,540" stroke="#38bdf8" strokeWidth="1.5" />
+                <path d="M 186,330 C 186,350 198,390 206,440 L 211,540" stroke="#38bdf8" strokeWidth="1.5" />
               </g>
             </g>
 
@@ -545,62 +637,36 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
             </g>
           </svg>
 
-          {/* Floating Data Badge Callouts over the Body (like in reference image!) */}
-          <div
-            className={`floating-callout-pill heart-callout ${selectedOrgan === 'heart' ? 'active' : ''}`}
-            style={{ top: '34%', left: '56%' }}
-            onClick={() => onSelectOrgan('heart')}
-          >
-            <span className="pill-dot red-dot" />
-            <span className="pill-text">
-              <strong>{hr > 80 ? '72%' : '18%'}</strong> {hr.toFixed(0)} BPM
-            </span>
+          {/* Floating Zoom & Fit Controls (Bottom Left) */}
+          <div className="cly-floating-controls-left">
+            <button
+              type="button"
+              className="cly-control-btn"
+              onClick={() => setZoom((z) => Math.min(z + 0.15, 1.4))}
+              title="Zoom In"
+            >
+              <Plus size={14} />
+            </button>
+            <button
+              type="button"
+              className="cly-control-btn"
+              onClick={() => setZoom((z) => Math.max(z - 0.15, 0.85))}
+              title="Zoom Out"
+            >
+              <Minus size={14} />
+            </button>
+            <button
+              type="button"
+              className="cly-control-btn"
+              onClick={() => setZoom(1)}
+              title="Fit to Screen"
+            >
+              <Maximize2 size={13} />
+            </button>
           </div>
 
-          <div
-            className={`floating-callout-pill lungs-callout ${selectedOrgan === 'lungs' ? 'active' : ''}`}
-            style={{ top: '31%', left: '16%' }}
-            onClick={() => onSelectOrgan('lungs')}
-          >
-            <span className="pill-dot cyan-dot" />
-            <span className="pill-text">
-              <strong>98%</strong> SpO2
-            </span>
-          </div>
-
-          <div
-            className={`floating-callout-pill brain-callout ${selectedOrgan === 'brain' ? 'active' : ''}`}
-            style={{ top: '8%', left: '54%' }}
-            onClick={() => onSelectOrgan('brain')}
-          >
-            <span className="pill-dot purple-dot" />
-            <span className="pill-text">
-              <strong>{fatigue}/10</strong> Fatigue
-            </span>
-          </div>
-
-          <div
-            className={`floating-callout-pill liver-callout ${selectedOrgan === 'immune' ? 'active' : ''}`}
-            style={{ top: '44%', left: '26%' }}
-            onClick={() => onSelectOrgan('immune')}
-          >
-            <span className="pill-dot amber-dot" />
-            <span className="pill-text">
-              <strong>15%</strong> {temp.toFixed(1)}°C
-            </span>
-          </div>
-
-          <div
-            className={`floating-callout-pill muscles-callout ${selectedOrgan === 'muscles' ? 'active' : ''}`}
-            style={{ top: '53%', left: '8%' }}
-            onClick={() => onSelectOrgan('muscles')}
-          >
-            <span className="pill-dot green-dot" />
-            <span className="pill-text">
-              <strong>{grip.toFixed(0)}kg</strong> Grip
-            </span>
-          </div>
         </div>
+      </div>
       </div>
 
       {/* Active Organ Insight Panel */}
