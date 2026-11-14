@@ -862,50 +862,174 @@ button {
   font-weight: 600;
 }
 
-/* Quick Access Login Presets */
-.login-roles {
+/* Quick Access Login Presets & Demo Credentials Grid */
+.demo-credentials-section {
   margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-panel);
+  padding: 14px 16px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-panel);
+  border-radius: 10px;
 }
 
-.login-roles-title {
-  font: 600 9px 'DM Mono', monospace;
-  letter-spacing: .08em;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-
-.login-roles-buttons {
+.demo-credentials-header {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+  margin-bottom: 12px;
 }
 
-.role-preset-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font: 500 11px 'DM Sans', sans-serif;
-  padding: 6px 11px;
-  border-radius: 6px;
-  border: 1px solid var(--border-input);
-  background: var(--bg-card);
-  color: var(--text-main);
-  cursor: pointer;
-  transition: all .15s ease;
-}
-
-.role-preset-btn:hover {
-  background: var(--primary-bg);
-  border-color: var(--primary-border);
+.demo-credentials-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--primary-accent);
 }
 
-.role-preset-btn.admin-preset:hover {
+.demo-pass-pill {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-input);
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--text-heading);
+}
+
+.demo-pass-pill b {
+  color: var(--primary-accent);
+}
+
+.demo-credentials-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 9px;
+}
+
+@media (max-width: 580px) {
+  .demo-credentials-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.demo-cred-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border-panel);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.16s ease;
+  position: relative;
+}
+
+.demo-cred-card:hover {
+  border-color: var(--primary);
+  background: var(--bg-domain-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.demo-cred-card.active {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.demo-cred-card.admin-card.active {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 1px #f59e0b;
+}
+
+.demo-cred-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.demo-cred-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.demo-cred-badge.admin {
   background: #fef3c7;
-  border-color: #fde68a;
   color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.demo-cred-badge.astronaut {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+[data-theme='dark'] .demo-cred-badge.admin {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+[data-theme='dark'] .demo-cred-badge.astronaut {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.demo-cred-callsign {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.demo-cred-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin-bottom: 2px;
+}
+
+.demo-cred-sub {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-bottom: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.demo-cred-fields {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-subtle);
+  padding: 4px 7px;
+  border-radius: 4px;
+}
+
+.demo-cred-fields code {
+  color: var(--primary-accent);
+  font-weight: 700;
 }
 
 .stats {

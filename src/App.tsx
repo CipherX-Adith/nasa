@@ -172,6 +172,62 @@ export default function App() {
   const [systemUsers, setSystemUsers] = useState<Any[]>([]);
   const [adminActionBusy, setAdminActionBusy] = useState(false);
 
+  // Core Demo Accounts: 1 Flight Surgeon Admin + 3 Demo Astronauts
+  const demoAccounts = useMemo(() => {
+    const baseCore = [
+      {
+        username: 'medical',
+        name: 'Dr. Robert Vance',
+        callSign: 'FLIGHT SURGEON',
+        role: 'medical',
+        isAdmin: true,
+        specialization: 'Chief Medical Officer (Admin Clearance)',
+      },
+      {
+        username: 'maya',
+        name: 'Maya Chen',
+        callSign: 'ORION-1',
+        role: 'astronaut',
+        isAdmin: false,
+        specialization: 'Commander / Mission Specialist',
+      },
+      {
+        username: 'elena',
+        name: 'Elena Rossi',
+        callSign: 'VEGA-2',
+        role: 'astronaut',
+        isAdmin: false,
+        specialization: 'Flight Engineer / Systems Lead',
+      },
+      {
+        username: 'david',
+        name: 'David Okafor',
+        callSign: 'NOVA-3',
+        role: 'astronaut',
+        isAdmin: false,
+        specialization: 'Science & Payload Specialist',
+      },
+    ];
+
+    if (!systemUsers || !systemUsers.length) return baseCore;
+
+    // Merge attributes from live database users
+    return baseCore.map((core) => {
+      const match = systemUsers.find(
+        (u) => u.username?.toLowerCase() === core.username.toLowerCase()
+      );
+      if (match) {
+        return {
+          ...core,
+          name: match.full_name || match.name || core.name,
+          callSign: match.call_sign || core.callSign,
+          specialization: match.specialization || core.specialization,
+        };
+      }
+      return core;
+    });
+  }, [systemUsers]);
+
   // Direct Astronaut Provisioning state (Admin only)
   const [directName, setDirectName] = useState('');
   const [directUsername, setDirectUsername] = useState('');
@@ -1438,37 +1494,51 @@ export default function App() {
                 </button>
               </form>
 
-              {/* Quick Access Role Presets */}
-              <div className="login-roles">
-                <div className="login-roles-title">ACTIVE ROLES & PERSONNEL (FROM DATABASE):</div>
-                <div className="login-roles-buttons">
-                  {systemUsers
-                    .filter((u) => u.status === 'approved')
-                    .map((u) => {
-                      const isAdmin = u.role === 'medical' || u.role === 'medical_officer';
-                      return (
-                        <button
-                          key={u.id || u.username}
-                          type="button"
-                          className={`role-preset-btn ${isAdmin ? 'admin-preset' : ''}`}
-                          onClick={() => {
-                            setUsernameInput(u.username);
-                            setPasswordInput('orbitcare-demo');
-                            setError('');
-                            setLoginClearancePending(false);
-                          }}
-                        >
-                          {isAdmin ? (
-                            <ShieldCheck size={14} color="#d97706" />
-                          ) : (
-                            <Users size={14} color="#0284c7" />
-                          )}
-                          <span>
-                            {isAdmin ? 'Admin' : 'Astronaut'} ({u.full_name || u.name || u.username})
+              {/* DEMO ACCESS CREDENTIALS & ONE-CLICK AUTO-FILL */}
+              <div className="demo-credentials-section">
+                <div className="demo-credentials-header">
+                  <span className="demo-credentials-title">
+                    DEMO ACCESS CREDENTIALS · CLICK TO AUTO-FILL
+                  </span>
+                  <span className="demo-pass-pill">
+                    Default Password: <b>orbitcare-demo</b>
+                  </span>
+                </div>
+
+                <div className="demo-credentials-grid">
+                  {demoAccounts.map((account) => {
+                    const isSelected = usernameInput.toLowerCase() === account.username.toLowerCase();
+                    return (
+                      <div
+                        key={account.username}
+                        className={`demo-cred-card ${account.isAdmin ? 'admin-card' : ''} ${isSelected ? 'active' : ''}`}
+                        onClick={() => {
+                          setUsernameInput(account.username);
+                          setPasswordInput('orbitcare-demo');
+                          setError('');
+                          setLoginClearancePending(false);
+                        }}
+                      >
+                        <div className="demo-cred-top">
+                          <span className={`demo-cred-badge ${account.isAdmin ? 'admin' : 'astronaut'}`}>
+                            {account.isAdmin ? (
+                              <ShieldCheck size={11} />
+                            ) : (
+                              <Users size={11} />
+                            )}
+                            {account.isAdmin ? 'Admin' : 'Astronaut'}
                           </span>
-                        </button>
-                      );
-                    })}
+                          <span className="demo-cred-callsign">{account.callSign}</span>
+                        </div>
+                        <div className="demo-cred-name">{account.name}</div>
+                        <div className="demo-cred-sub">{account.specialization}</div>
+                        <div className="demo-cred-fields">
+                          <span>User: <code>{account.username}</code></span>
+                          <span>Pass: <code>orbitcare-demo</code></span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </>
@@ -1586,9 +1656,6 @@ export default function App() {
             </>
           )}
 
-          <div className="credentials" style={{ marginTop: 14 }}>
-            Demo Credentials · Password <b>orbitcare-demo</b>
-          </div>
           <div className="login-foot">
             <ShieldCheck size={14} /> Decision support prototype · Simulated mission telemetry
           </div>

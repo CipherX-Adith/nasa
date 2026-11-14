@@ -148,10 +148,10 @@ def seed(db):
             )
 
     db.add_all([
-        User(username="medical", password_hash=hash_password("orbitcare-demo"), role="medical"),
-        User(username="astronaut", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[0].id),
-        User(username="maya", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[0].id),
-        User(username="elena", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[1].id),
-        User(username="david", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[2].id),
+        User(username="medical", password_hash=hash_password("orbitcare-demo"), role="medical", full_name="Dr. Robert Vance", specialization="Flight Surgeon / Chief Medical Officer"),
+        User(username="astronaut", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[0].id, full_name="Maya Chen", call_sign="ORION-1", specialization="Commander / Mission Specialist"),
+        User(username="maya", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[0].id, full_name="Maya Chen", call_sign="ORION-1", specialization="Commander / Mission Specialist"),
+        User(username="elena", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[1].id, full_name="Elena Rossi", call_sign="VEGA-2", specialization="Flight Engineer / Systems Lead"),
+        User(username="david", password_hash=hash_password("orbitcare-demo"), role="astronaut", astronaut_id=astronauts[2].id, full_name="David Okafor", call_sign="NOVA-3", specialization="Science & Payload Specialist"),
     ])
     db.commit()
