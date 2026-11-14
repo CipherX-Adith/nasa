@@ -85,6 +85,20 @@ export default function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // Clean up legacy local assessment caches so Firebase Realtime Database is the sole source of truth
+  useEffect(() => {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('orbitcare_assessments_')) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+    } catch {}
+  }, []);
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
@@ -724,25 +738,11 @@ export default function App() {
         ]);
         if (l && Array.isArray(l)) setAlerts(l);
         if (ass && Array.isArray(ass)) {
-          let mergedAss = [...ass];
-          try {
-            const stored = JSON.parse(
-              localStorage.getItem(`orbitcare_assessments_${targetId}`) || '[]'
-            );
-            for (const item of stored) {
-              const exists = mergedAss.some(
-                (x: Any) =>
-                  x.id === item.id ||
-                  (x.timestamp === item.timestamp && x.symptoms === item.symptoms)
-              );
-              if (!exists) mergedAss.push(item);
-            }
-          } catch {}
-          mergedAss.sort(
+          const sorted = [...ass].sort(
             (x, y) =>
               new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime()
           );
-          setAssessmentsList(mergedAss);
+          setAssessmentsList(sorted);
         }
       } catch (e) {
         console.warn('Background sync error:', e);
@@ -2600,11 +2600,6 @@ export default function App() {
                         // Immediately append to state for zero-latency UI update
                         setAssessmentsList((prev) => {
                           const updated = [...prev, finalEntry];
-                          try {
-                            const key = `orbitcare_assessments_${targetId}`;
-                            const prevStored = JSON.parse(localStorage.getItem(key) || '[]');
-                            localStorage.setItem(key, JSON.stringify([...prevStored, finalEntry]));
-                          } catch {}
 
                           // If Firebase Cloud Database is active, save to Firestore in real-time!
                           if (firebaseActive) {
@@ -2617,7 +2612,7 @@ export default function App() {
                         });
 
                         setAssessmentFeedback(
-                          `Assessment successfully recorded for Mission Day ${assessmentsList.length + 1} (${symptomsVal})!`
+                          `Assessment successfully recorded for Mission Day 60 (${symptomsVal})!`
                         );
                         setTimeout(() => setAssessmentFeedback(''), 8000);
 
@@ -2668,22 +2663,29 @@ export default function App() {
                     </thead>
                     <tbody>
                       {assessmentsList.slice(-15).reverse().map((a: Any, i: number) => {
-                        const dayIndex = assessmentsList.length - i;
                         const isLatest = i === 0;
+                        const dayNum =
+                          a.id && a.id >= 1 && a.id <= 60 && a.simulated
+                            ? a.id
+                            : !a.simulated
+                            ? 60
+                            : Math.min(60, Math.max(1, assessmentsList.length - i));
                         return (
                           <tr
                             key={a.id || i}
                             style={isLatest && !a.simulated ? { background: isLight ? '#f0fdf4' : 'rgba(16, 185, 129, 0.08)' } : undefined}
                           >
                             <td>
-                              <span className="type-pill assessment">
-                                Day {dayIndex}
-                              </span>
-                              {isLatest && !a.simulated && (
-                                <span style={{ marginLeft: '6px', fontSize: '10px', background: '#10b981', color: '#fff', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                                  NEW
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <span className="type-pill assessment">
+                                  Day {dayNum}
                                 </span>
-                              )}
+                                {!a.simulated && (
+                                  <span className="assessment-badge-report">
+                                    {isLatest ? 'NEW' : 'Check-in'}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td>{fmt(a.timestamp)}</td>
                             <td>
