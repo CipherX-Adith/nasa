@@ -2505,10 +2505,6 @@ export default function App() {
             <>
               <div className="heading-row">
                 <div>
-                  <div className="eyebrow">
-                    MARS TRANSIT · DAY 042 <span className="sep">·</span>{' '}
-                    {isAdmin ? 'FLIGHT SURGEON COMMAND' : 'ASTRONAUT TELEMETRY'}
-                  </div>
                   <h1>
                     {isAdmin ? 'Crew Health Overview' : 'Personal Health Overview'}
                   </h1>
@@ -2623,10 +2619,6 @@ export default function App() {
             <>
               <div className="heading-row">
                 <div>
-                  <div className="eyebrow">
-                    HEMODYNAMICS & CARDIAC MONITORING <span className="sep">·</span>{' '}
-                    {isAdmin ? `CREW MEMBER: ${astronaut?.name} (${astronaut?.call_sign})` : 'PERSONAL TELEMETRY'}
-                  </div>
                   <h1>Cardiovascular Profile</h1>
                   <p className="muted">
                     {isAdmin
@@ -2695,10 +2687,6 @@ export default function App() {
             <>
               <div className="heading-row">
                 <div>
-                  <div className="eyebrow">
-                    NEUROCOGNITIVE & OPERATIONAL READINESS <span className="sep">·</span>{' '}
-                    {isAdmin ? `CREW MEMBER: ${astronaut?.name} (${astronaut?.call_sign})` : 'DAILY LOGS'}
-                  </div>
                   <h1>Behavioural & Neurocognitive Assessment</h1>
                   <p className="muted">
                     {isAdmin
@@ -3164,10 +3152,6 @@ export default function App() {
             <>
               <div className="heading-row">
                 <div>
-                  <div className="eyebrow">
-                    FLIGHT CHRONOLOGY & PHYSIOLOGICAL EVENTS <span className="sep">·</span>{' '}
-                    {isAdmin ? `CREW MEMBER: ${astronaut?.name}` : 'PERSONAL TIMELINE'}
-                  </div>
                   <h1>Mission Timeline</h1>
                   <p className="muted">
                     {isAdmin
@@ -3205,10 +3189,6 @@ export default function App() {
             <>
               <div className="heading-row">
                 <div>
-                  <div className="eyebrow">
-                    CLINICAL REPOSITORY & COUNTERMEASURES <span className="sep">·</span>{' '}
-                    {isAdmin ? `CREW MEMBER: ${astronaut?.name}` : 'MY MEDICAL RECORDS'}
-                  </div>
                   <h1>Medical Records & Clinical Evaluations</h1>
                   <p className="muted">
                     {isAdmin
@@ -3491,9 +3471,6 @@ export default function App() {
             <div className="crew-accounts-container">
               <div className="heading-row">
                 <div>
-                  <div className="eyebrow">
-                    MISSION CONTROL ADMINISTRATION <span className="sep">·</span> CREW MANAGEMENT
-                  </div>
                   <h1>Astronaut Accounts & Flight Clearances</h1>
                   <p className="muted">
                     Authorize pending astronaut applications, manage mission roster access, or provision new crew member credentials.
@@ -3725,10 +3702,6 @@ export default function App() {
             <>
               <div className="heading-row">
                 <div>
-                  <div className="eyebrow">
-                    FLIGHT SURGEON AI DECISION SUPPORT <span className="sep">·</span>{' '}
-                    {isAdmin ? `TARGET: ${astronaut?.name}` : 'CREW ASSISTANT'}
-                  </div>
                   <h1>Evidence-Grounded Assistant</h1>
                   <p className="muted">
                     Ask questions about this astronaut’s measurements, personal baselines, assessments, alerts, and records.
