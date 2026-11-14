@@ -96,7 +96,7 @@ export default function App() {
         }
       }
       keysToRemove.forEach((k) => localStorage.removeItem(k));
-    } catch {}
+    } catch { }
   }, []);
 
   const toggleTheme = () => {
@@ -813,7 +813,7 @@ export default function App() {
 
           // Stream to Firebase in real-time if active
           if (firebaseActive) {
-            streamTelemetryToFirebase(targetId, tickData).catch(() => {});
+            streamTelemetryToFirebase(targetId, tickData).catch(() => { });
           }
         }
       } catch (e) {
@@ -1281,9 +1281,8 @@ export default function App() {
           {availablePills.map((m) => (
             <button
               key={m}
-              className={`telemetry-pill-btn ${
-                selectedMetric === m ? 'active' : ''
-              }`}
+              className={`telemetry-pill-btn ${selectedMetric === m ? 'active' : ''
+                }`}
               onClick={() => setSelectedMetric(m)}
             >
               {m}
@@ -2147,8 +2146,8 @@ export default function App() {
                           metric === 'Core Temp'
                             ? 'Temperature'
                             : metric === 'Grip'
-                            ? 'Body mass'
-                            : metric
+                              ? 'Body mass'
+                              : metric
                         );
                       const b =
                         baseline(metric) ||
@@ -2156,8 +2155,8 @@ export default function App() {
                           metric === 'Core Temp'
                             ? 'Temperature'
                             : metric === 'Grip'
-                            ? 'Body mass'
-                            : metric
+                              ? 'Body mass'
+                              : metric
                         );
                       return (
                         <button
@@ -2233,9 +2232,8 @@ export default function App() {
                           return (
                             <tr
                               key={b.metric}
-                              className={`table-row-clickable ${
-                                isSelected ? 'active' : ''
-                              }`}
+                              className={`table-row-clickable ${isSelected ? 'active' : ''
+                                }`}
                               onClick={() => {
                                 const pill =
                                   Object.keys(metricMap).find(
@@ -2434,9 +2432,8 @@ export default function App() {
                     {['Sleep Duration', 'Fatigue', 'Stress', 'Mood', 'Sleep Quality'].map((m) => (
                       <button
                         key={m}
-                        className={`telemetry-pill-btn ${
-                          behaviouralMetric === m ? 'active' : ''
-                        }`}
+                        className={`telemetry-pill-btn ${behaviouralMetric === m ? 'active' : ''
+                          }`}
                         onClick={() => setBehaviouralMetric(m)}
                       >
                         {m}
@@ -2737,7 +2734,7 @@ export default function App() {
                         }));
 
                         // Trigger non-blocking background refresh
-                        load().catch(() => {});
+                        load().catch(() => { });
                       } catch (err: any) {
                         setAssessmentError(err.message || 'Failed to submit assessment');
                       } finally {
@@ -2782,8 +2779,8 @@ export default function App() {
                           a.id && a.id >= 1 && a.id <= 60 && a.simulated
                             ? a.id
                             : !a.simulated
-                            ? 60
-                            : Math.min(60, Math.max(1, assessmentsList.length - i));
+                              ? 60
+                              : Math.min(60, Math.max(1, assessmentsList.length - i));
                         return (
                           <tr
                             key={a.id || i}
@@ -2810,9 +2807,8 @@ export default function App() {
                             <td>{a.sleep_quality} / 10</td>
                             <td>
                               <span
-                                className={`priority ${
-                                  a.fatigue >= 5 ? 'high-text' : ''
-                                }`}
+                                className={`priority ${a.fatigue >= 5 ? 'high-text' : ''
+                                  }`}
                               >
                                 {a.fatigue} / 10
                               </span>
