@@ -25,6 +25,11 @@ backend/orbitcare.db
 *.sqlite3
 *.db
 
+# Downloaded OSDR source data can be large and may have redistribution limits.
+# Keep only the small provenance manifest under version control.
+backend/data/osdr/*
+!backend/data/osdr/MANIFEST.json
+
 # Environment variables & local configuration
 backend/.env
 .env

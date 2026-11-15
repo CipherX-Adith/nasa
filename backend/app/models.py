@@ -29,6 +29,40 @@ class Astronaut(Base):
     flight_clearance: Mapped[str | None] = mapped_column(String, nullable=True, default="UNREVIEWED")
     simulated: Mapped[bool] = mapped_column(Boolean, default=True)
 
+class ReferenceDataset(Base):
+    __tablename__ = "reference_datasets"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    accession: Mapped[str] = mapped_column(String, unique=True, index=True)
+    title: Mapped[str] = mapped_column(String)
+    citation: Mapped[str] = mapped_column(Text, default="")
+    url: Mapped[str] = mapped_column(String)
+    sha256: Mapped[str] = mapped_column(String)
+    loaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+class ReferenceSubject(Base):
+    __tablename__ = "reference_subjects"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String, index=True)
+    dataset_id: Mapped[int] = mapped_column(ForeignKey("reference_datasets.id"), index=True)
+    label: Mapped[str] = mapped_column(String)
+
+class LabResult(Base):
+    __tablename__ = "lab_results"
+    __table_args__ = (UniqueConstraint("accession", "row_hash", name="uq_lab_result_source_row"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dataset_id: Mapped[int] = mapped_column(ForeignKey("reference_datasets.id"), index=True)
+    subject_code: Mapped[str] = mapped_column(String, index=True)
+    analyte: Mapped[str] = mapped_column(String, index=True)
+    value: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String)
+    ref_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ref_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    timepoint_label: Mapped[str] = mapped_column(String)
+    days_from_launch: Mapped[float | None] = mapped_column(Float, nullable=True, index=True)
+    accession: Mapped[str] = mapped_column(String, index=True)
+    source_file: Mapped[str] = mapped_column(String)
+    row_hash: Mapped[str] = mapped_column(String)
+
 class Measurement(Base):
     __tablename__ = "measurements"
     id: Mapped[int] = mapped_column(primary_key=True)
