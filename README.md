@@ -1,65 +1,300 @@
-# ORBITCARE
+# 🚀 ORBITCARE
 
-ORBITCARE is a prototype astronaut health monitoring and decision-support application. It combines simulated mission telemetry, astronaut self-reports, personal baselines, deterministic deviation flags, medical document review, daily data summaries, a mission timeline, a countermeasure check-in list, and a record-grounded assistant. It is not a clinically validated product, does not diagnose, and does not make flight-clearance decisions.
+### AI-Powered Astronaut Health Monitoring & Clinical Decision-Support System
 
-## Requirements
+**Intelligent healthcare for astronauts on long-duration deep-space missions.**
+
+ORBITCARE is an AI-powered astronaut health monitoring and clinical decision-support platform designed for long-duration space exploration.
+
+Inspired by the challenges of a Mars transit mission, ORBITCARE addresses a critical problem in space medicine: communication delays between Earth and spacecraft can reach up to 22 minutes each way, making immediate ground-based medical assistance difficult during emergencies.
+
+ORBITCARE provides an autonomous, edge-capable medical workstation that helps onboard Flight Surgeons monitor astronaut health, detect unusual physiological changes, review medical records, and support clinical decision-making.
+
+The project is demonstrated through a simulated **Mars Transit — Day 42 / Asteria-7 mission**.
+
+---
+
+## 🌌 Key Features
+
+### 1. Role-Based Health Monitoring
+
+ORBITCARE provides separate workspaces for two user roles:
+
+- **Medical Officers:** Monitor the entire crew, investigate health alerts, review medical documents, generate clinical reports, and evaluate astronaut readiness.
+- **Astronauts:** Monitor personal health data, submit daily health assessments, track countermeasures, and interact with the AI assistant.
+
+Each astronaut's medical information is isolated to protect individual privacy.
+
+### 2. AI-Powered Anomaly Detection
+
+Uses statistical intelligence to identify unusual changes in astronaut physiology.
+
+- Establishes individual health baselines using Median and Median Absolute Deviation (MAD).
+- Identifies significant deviations from personal baselines.
+- Detects persistent physiological trends.
+- Generates high- and medium-priority alerts.
+- Reduces duplicate alerts to prevent alert fatigue.
+
+Unlike systems that rely entirely on fixed population-wide thresholds, ORBITCARE considers individual physiological history.
+
+### 3. Interactive Anatomical Digital Twin
+
+An interactive holographic-style anatomical visualization that connects astronaut health data with five major physiological systems.
+
+| Physiological System | Monitored Parameters                 |
+| -------------------- | ------------------------------------ |
+| Cardiovascular       | Heart rate, HRV, blood pressure      |
+| Pulmonary            | SpO₂, respiration, cabin CO₂         |
+| Neurocognitive       | Sleep, fatigue, circadian rhythm     |
+| Musculoskeletal      | Grip strength, muscle condition      |
+| Immune & Thermal     | Core temperature, radiation exposure |
+
+Features include interactive anatomical inspection, zooming, panning, organ focus, and physiological stress indicators.
+
+### 4. Medical Document Processing
+
+Allows Flight Surgeons to upload PDF medical reports and extract clinical observations.
+
+- Extracts text from PDF documents.
+- Supports optional OCR for scanned documents.
+- Identifies candidate laboratory observations.
+- Places extracted results in a pending-review queue.
+- Requires authorized medical approval before observations enter verified clinical records.
+
+This human-in-the-loop approach prevents automatically extracted values from being treated as verified medical information.
+
+### 5. Dual-Mode AI Health Assistant
+
+ORBITCARE supports both connected and offline operation.
+
+**Cloud AI — Google Gemini**
+
+- Answers questions using astronaut-specific health information.
+- Uses structured medical evidence as context.
+- Provides evidence references in responses.
+- Uses safety-constrained prompts to reduce unsupported medical claims.
+
+**Offline Assistant**
+
+- Uses a deterministic local rules-based engine.
+- Works without an internet connection or Gemini API key.
+- Answers questions about alerts, biometric trends, medical history, and mission timelines.
+
+### 6. Daily Countermeasure Tracking
+
+Astronauts can record their daily health-maintenance activities, including:
+
+- Aerobic exercise.
+- Resistive exercise (ARED).
+- Hydration and electrolyte intake.
+- Sleep and circadian management.
+
+Medical Officers can monitor countermeasure compliance.
+
+### 7. Secure Medical Records & Audit Trail
+
+- JWT-based authentication.
+- Password hashing.
+- Role-based authorization.
+- Astronaut-specific data isolation.
+- Protected medical document verification.
+- Audit logging of important clinical and administrative actions.
+
+---
+
+## 🏗️ Technology Stack
+
+| Component           | Technologies                          |
+| ------------------- | ------------------------------------- |
+| Frontend            | React 19, TypeScript                  |
+| Styling             | Tailwind CSS v4, Custom CSS           |
+| Build Tool          | Vite                                  |
+| Backend             | Python, FastAPI                       |
+| Database            | SQLAlchemy, SQLite                    |
+| Authentication      | JWT, bcrypt                           |
+| AI Integration      | Google Gemini API                     |
+| Intelligence Engine | Python, Statistical Anomaly Detection |
+| Document Processing | PyPDF, Tesseract OCR, PyMuPDF         |
+| Cloud Integration   | Firebase                              |
+| Testing             | Pytest                                |
+| Deployment          | Vercel                                |
+
+---
+
+## 📂 Project Structure
+
+```text
+nasa/
+│
+├── api/
+│   └── index.py
+│
+├── backend/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── models.py
+│   │   ├── intelligence.py
+│   │   ├── core.py
+│   │   ├── db.py
+│   │   └── seed.py
+│   │
+│   ├── tests/
+│   ├── requirements.txt
+│   └── requirements-ocr.txt
+│
+├── src/
+│   ├── components/
+│   │   └── DigitalTwinViewer.tsx
+│   ├── App.tsx
+│   ├── firebase.ts
+│   ├── main.tsx
+│   └── style.css
+│
+├── index.html
+├── package.json
+├── vite.config.ts
+├── vercel.json
+└── README.md
+```
+
+### Architecture Overview
+
+- **Frontend:** Provides the interactive medical dashboard, astronaut workspaces, alerts, reports, and anatomical Digital Twin.
+- **Backend:** Handles authentication, medical records, telemetry, clinical workflows, and API requests.
+- **Intelligence Engine:** Processes physiological measurements, establishes personal baselines, and identifies anomalies.
+- **AI Layer:** Provides Gemini-powered assistance with a deterministic offline fallback.
+- **Database:** Stores astronaut profiles, measurements, alerts, assessments, and clinical records.
+- **Optional Cloud Integration:** Firebase supports additional cloud synchronization.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
 
 - Python 3.10+
 - Node.js 20+
+- npm
+- Git
 
-## Run locally
+### 1. Clone the Repository
 
-In PowerShell, from the repository root:
+```bash
+git clone https://github.com/CipherX-Adith/nasa.git
+cd nasa
+```
+
+### 2. Start the Backend
 
 ```powershell
 cd backend
+
 python -m venv .venv
+
 .\.venv\Scripts\Activate.ps1
+
 pip install -r requirements.txt
+
 Copy-Item .env.example .env
-uvicorn app.main:app --reload
+
+uvicorn app.main:app --reload --port 8000
 ```
 
-In a second terminal from the repository root:
+Backend API: `http://localhost:8000`
 
-```powershell
+API documentation: `http://localhost:8000/docs`
+
+### 3. Start the Frontend
+
+Open another terminal in the project root:
+
+```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The backend API and interactive docs are at http://localhost:8000 and http://localhost:8000/docs. SQLite persists to `backend/orbitcare.db` when started from `backend`. Set `DATABASE_URL` to a managed database for deployments; local SQLite files may not persist on serverless hosts.
+Frontend: `http://localhost:5173`
 
-The fresh local demo seeds three simulated astronauts in **Mars Transit — Day 42**. Maya Chen's sample includes resting heart rate 65→82 BPM, HRV 65→42 ms, sleep 7.5→5 hours and fatigue 2→7/10. These values are illustrative demo data. Demo logins use password `orbitcare-demo`: `medical` (medical officer), `maya` / `astronaut` (Maya), `elena`, and `david`. Change credentials and the local demo `SECRET_KEY` before any deployment.
+### 4. Optional OCR Setup
 
-## Configuration
+For scanned medical documents:
 
-- **Gemini:** set `GEMINI_API_KEY` in `backend/.env` to enable live model responses. `GEMINI_MODEL` defaults to `gemini-3.8-flash`. Without a key, the assistant uses local record retrieval and displays `LOCAL FALLBACK MODE`. The key is used only by the backend.
-- **Scanned PDF OCR (optional):** install `pip install -r requirements-ocr.txt` from `backend`, then install the Tesseract executable separately and ensure it is on `PATH` (or configure pytesseract's executable path). Without those pieces, selectable PDF text extraction still works and scanned PDFs are stored with OCR unavailable status for manual review.
-- **Firebase (optional):** backend sync is disabled unless both `FIREBASE_DATABASE_URL` and `FIREBASE_DATABASE_SECRET` are configured. Firebase is not used as the source of user identities, roles, or password hashes. Use restrictive database rules and a least-privilege credential.
-- **CORS:** add deployed frontend origins as a comma-separated `FRONTEND_ORIGINS` value. Avoid wildcard origins.
-- **Production:** set a strong unique `SECRET_KEY`; production startup fails when it is missing. Configure an external persistent `DATABASE_URL` where the host does not preserve files.
+```bash
+cd backend
+pip install -r requirements-ocr.txt
+```
 
-## Included workflows
+OCR functionality may also require installing the Tesseract OCR engine separately.
 
-- JWT authentication and role checks for astronaut and medical-officer endpoints.
-- Astronaut private data isolation; astronauts submit only their own self-reports and checklist updates.
-- Robust median/MAD personal baselines with insufficient-history handling and quality exclusions.
-- Deterministic, deduplicated deviation alerts with an explanation and source measurement.
-- Explicit source, timestamp, and simulated-data flags.
-- Medical-only PDF upload with selectable text extraction and optional OCR; parsed observations remain pending until a medical officer reviews, edits, approves, or rejects each candidate.
-- Database-persisted daily checklist check-ins with date-based history; the entries are illustrative, self-reported and have no prescribed duration or dose.
-- Prototype monitoring coverage, baseline comparisons, missing-data listing, and separate deviation flags. Coverage is not a clinical score or clearance.
-- Local evidence assistant and optional backend-only Gemini responses with citations.
-- Audit events for key record, alert, clearance, observation-review, and checklist actions. Audit entries do not duplicate medical content.
+---
 
-## Tests and build
+## 🛰️ Mission Simulation
 
-From `backend`, run `pytest -q`. From the repository root, run `npm run build`.
+**Mission:** Mars Transit — Day 42  
+**Spacecraft:** Asteria-7
 
-## Limitations
+ORBITCARE includes a synthetic 42-day astronaut health dataset featuring three simulated crew members.
 
-- Demo sensor and self-report data are simulated. The display's live refresh reads the latest stored sample; no real spacecraft telemetry adapter is included.
-- OCR relies on local Tesseract and can produce errors; extracted values must be checked against the source document. This prototype does not interpret reference ranges as diagnoses.
-- Gemini mode requires an available API key/model and network access; the local assistant remains available when Gemini is unavailable.
-- The app has not been independently security audited and does not claim regulatory compliance, encryption at rest, or clinical validation.
-- Existing databases created before this update receive additive SQLite column migrations. The Mars Transit demo seed is only inserted into an empty database; existing data is not overwritten.
+| Astronaut    | Mission Role       | Simulated Health Profile         |
+| ------------ | ------------------ | -------------------------------- |
+| Maya Chen    | Mission Commander  | Cardiovascular and fatigue drift |
+| Elena Rossi  | Flight Engineer    | Nominal physiological baseline   |
+| David Okafor | Payload Specialist | Nominal physiological baseline   |
+
+### Example: Maya Chen's Physiological Changes
+
+| Health Parameter       |   Initial |  Day 42 |
+| ---------------------- | --------: | ------: |
+| Resting Heart Rate     |    65 BPM |  82 BPM |
+| Heart Rate Variability |     65 ms |   42 ms |
+| Sleep Duration         | 7.5 hours | 5 hours |
+| Fatigue                |      2/10 |    7/10 |
+
+These simulated changes demonstrate how ORBITCARE identifies deviations, generates alerts, and provides supporting information for Flight Surgeon review.
+
+---
+
+## 🧪 Testing
+
+Run backend tests:
+
+```bash
+cd backend
+pytest -v
+```
+
+Build the frontend:
+
+```bash
+npm run build
+```
+
+The test suite covers authentication, role-based access, data privacy, anomaly detection, alert generation, document verification, and assistant functionality.
+
+---
+
+## 🔮 Future Scope
+
+- Integration with real-time wearable health sensors.
+- Advanced machine learning for predictive health monitoring.
+- Improved onboard edge AI capabilities.
+- More detailed 3D anatomical visualization.
+- Enhanced radiation and environmental monitoring.
+- Secure synchronization with Earth-based medical facilities.
+- Advanced temporal anomaly detection.
+
+---
+
+## ⚠️ Disclaimer
+
+ORBITCARE is an educational and research prototype built around a simulated space mission. It is not a clinically validated or certified medical device and does not replace professional medical judgment.
+
+It does not independently diagnose medical conditions or make autonomous flight-clearance decisions. All simulated astronaut data is synthetic, and clinical decisions must remain under the supervision of authorized medical professionals.
+
+---
+
+## 🚀 Project Vision
+
+**ORBITCARE — Bringing intelligent healthcare closer to the stars.**
+
+Building a future where astronauts can receive intelligent, evidence-supported health monitoring and clinical assistance, even when Earth is millions of kilometers away.
