@@ -821,6 +821,8 @@ export default function App() {
       hrv: latest('Heart rate variability')?.value ?? latest('HRV')?.value ?? null,
       systolicBp: latest('Systolic blood pressure')?.value ?? latest('Systolic BP')?.value ?? null,
       diastolicBp: latest('Diastolic blood pressure')?.value ?? null,
+      respiration: latest('Respiration rate')?.value ?? null,
+      spo2: latest('SpO2')?.value ?? null,
       coreTemp: latest('Core body temperature')?.value ?? latest('Core Temp')?.value ?? null,
       grip: latest('Grip strength')?.value ?? latest('Grip')?.value ?? null,
       sleepHours: latest('Sleep duration')?.value ?? null,
@@ -829,6 +831,21 @@ export default function App() {
       radiation: latest('Radiation dose rate')?.value ?? null,
     };
   }, [measurements]);
+
+  const twinBaselines = useMemo(() => ({
+    heartRate: baseline('Resting heart rate')?.median ?? null,
+    hrv: baseline('Heart rate variability')?.median ?? baseline('HRV')?.median ?? null,
+    systolicBp: baseline('Systolic blood pressure')?.median ?? baseline('Systolic BP')?.median ?? null,
+    diastolicBp: baseline('Diastolic blood pressure')?.median ?? null,
+    respiration: baseline('Respiration rate')?.median ?? null,
+    spo2: baseline('SpO2')?.median ?? null,
+    coreTemp: baseline('Core body temperature')?.median ?? baseline('Core Temp')?.median ?? null,
+    grip: baseline('Grip strength')?.median ?? baseline('Grip')?.median ?? null,
+    sleepHours: baseline('Sleep duration')?.median ?? null,
+    fatigue: baseline('Fatigue')?.median ?? null,
+    cabinCo2: baseline('Cabin CO2')?.median ?? null,
+    radiation: baseline('Radiation dose rate')?.median ?? null,
+  }), [baselines]);
 
   // Dynamic pill group depending on active sidebar tab
   const availablePills = useMemo(() => {
@@ -2500,7 +2517,7 @@ export default function App() {
                 </label>
                 {error && !loginClearancePending && <p className="error">{error}</p>}
                 <button disabled={busy}>
-                  {busy ? 'Verifying Flight Clearance…' : 'Sign in to Dashboard'} <span>→</span>
+                  {busy ? 'Logging in…' : 'Sign in to Dashboard'} <span>→</span>
                 </button>
               </form>
 
@@ -2733,7 +2750,9 @@ export default function App() {
               className="topbar-logout-btn"
               title="Sign out"
               onClick={() => {
-                localStorage.clear();
+                // Never erase user preferences or unrelated application storage.
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
                 setToken('');
                 setUser(null);
               }}
@@ -2880,6 +2899,9 @@ export default function App() {
                 onSelectOrgan={handleSelectOrgan}
                 astronautName={astronaut?.name}
                 vitals={liveVitals}
+                baselines={twinBaselines}
+                missionDay={42}
+                dataSource={astronaut?.simulated === false ? 'real' : 'simulated'}
               />
 
               {/* SOLID CURVED QUICK JUMP DOCK */}

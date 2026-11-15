@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, text
+from sqlalchemy import desc, text, func
 from pydantic import BaseModel, Field
 
 try:
@@ -12,9 +12,9 @@ try:
     load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 except ImportError:
     pass
-from .db import Base, engine, get_db
-from .models import User, Astronaut, Measurement, Alert, Assessment, MedicalRecord, MedicalDocument, MedicalObservation, CountermeasureCheck, AuditEvent
-from .core import verify_password, hash_password, make_token, read_token
+from .db import Base, engine, get_db, SessionLocal
+from .models import User, Astronaut, Measurement, Alert, Assessment, MedicalRecord, MedicalDocument, MedicalObservation, CountermeasureCheck, AuditEvent, ReferenceDataset, LabResult
+from .core import verify_password, hash_password, make_token, read_token, ORBITCARE_ENV
 from .intelligence import (
     baseline,
     detect,
@@ -25,12 +25,13 @@ from .intelligence import (
 from .seed import seed
 
 app = FastAPI(title="ORBITCARE", version="1.0.0")
+DEMO_MODE = os.getenv("DEMO_MODE", "true" if ORBITCARE_ENV == "dev" else "false").strip().lower() == "true"
+FRONTEND_ORIGINS = [origin.strip() for origin in os.getenv("FRONTEND_ORIGINS", "").split(",") if origin.strip()]
+if ORBITCARE_ENV == "dev":
+    FRONTEND_ORIGINS.extend(["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://localhost:8000"])
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in os.getenv("FRONTEND_ORIGINS", "").split(",") if origin.strip()] + [
-        "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://localhost:8000"
-    ],
-    allow_origin_regex=r"^https?://.*",
+    allow_origins=FRONTEND_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -310,10 +311,11 @@ def ensure_seed_users(db: Session):
     db.commit()
 
 with next(get_db()) as db:
-    if db.query(Astronaut).count() == 0:
+    if DEMO_MODE and db.query(Astronaut).count() == 0:
         seed(db)
-    ensure_seed_astronauts(db)
-    ensure_seed_users(db)
+    if DEMO_MODE:
+        ensure_seed_astronauts(db)
+        ensure_seed_users(db)
 
 def current_user(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -446,7 +448,44 @@ class CountermeasureUpdate(BaseModel):
 @app.get("/api")
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "app": "ORBITCARE"}
+    with SessionLocal() as db:
+        sources = [{"accession": row.accession, "title": row.title, "sha256": row.sha256,
+                    "row_count": db.query(LabResult).filter_by(dataset_id=row.id).count()}
+                   for row in db.query(ReferenceDataset).all()]
+    return {"status": "ok", "app": "ORBITCARE", "demo_mode": DEMO_MODE, "data_sources": sources}
+
+@app.get("/api/datasets")
+def datasets(db: Session = Depends(get_db), user = Depends(current_user)):
+    return [{"accession": row.accession, "title": row.title, "citation": row.citation, "url": row.url,
+             "sha256": row.sha256, "loaded_at": row.loaded_at,
+             "row_count": db.query(LabResult).filter_by(dataset_id=row.id).count()} for row in db.query(ReferenceDataset).all()]
+
+def _dataset_or_404(accession: str, db: Session):
+    dataset = db.query(ReferenceDataset).filter_by(accession=accession).first()
+    if not dataset:
+        raise HTTPException(404, "Dataset is not loaded. See Data Provenance for manual import instructions.")
+    return dataset
+
+@app.get("/api/datasets/{accession}/analytes")
+def dataset_analytes(accession: str, db: Session = Depends(get_db), user = Depends(current_user)):
+    dataset = _dataset_or_404(accession, db)
+    return [{"analyte": name, "count": count} for name, count in db.query(LabResult.analyte, func.count(LabResult.id)).filter_by(dataset_id=dataset.id).group_by(LabResult.analyte).all()]
+
+@app.get("/api/datasets/{accession}/series")
+def dataset_series(accession: str, subject: str, analyte: str, offset: int = 0, limit: int = 200, db: Session = Depends(get_db), user = Depends(current_user)):
+    dataset = _dataset_or_404(accession, db)
+    limit = min(max(limit, 1), 500); offset = max(offset, 0)
+    rows = db.query(LabResult).filter_by(dataset_id=dataset.id, subject_code=subject, analyte=analyte).order_by(LabResult.days_from_launch, LabResult.id).offset(offset).limit(limit).all()
+    return {"accession": accession, "subject": subject, "analyte": analyte, "offset": offset, "limit": limit, "rows": [serialize(row) for row in rows]}
+
+@app.get("/api/datasets/{accession}/summary")
+def dataset_summary(accession: str, db: Session = Depends(get_db), user = Depends(current_user)):
+    dataset = _dataset_or_404(accession, db)
+    rows = db.query(LabResult).filter_by(dataset_id=dataset.id)
+    return {"accession": accession, "subjects": rows.with_entities(LabResult.subject_code).distinct().count(),
+            "timepoints": rows.with_entities(LabResult.timepoint_label).distinct().count(),
+            "analytes": rows.with_entities(LabResult.analyte).distinct().count(), "rows": rows.count(),
+            "note": "Reference-informed, not a diagnosis. Laboratory ranges are terrestrial reference ranges, not spaceflight limits."}
 
 # ----------------- AUTHENTICATION & REGISTRATION -----------------
 
@@ -1409,7 +1448,7 @@ def ask(data: Ask, db: Session = Depends(get_db), user = Depends(current_user)):
 
     local_answer = "\n\n".join(local_parts) + "\n\nThese records support investigation, not diagnosis. A change from baseline is not a causal or clinical conclusion."
     key = os.getenv("GEMINI_API_KEY", "").strip()
-    model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
+    model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
     if key:
         try:
             import httpx
@@ -1453,7 +1492,7 @@ def ask(data: Ask, db: Session = Depends(get_db), user = Depends(current_user)):
 @app.get("/api/assistant/status")
 def assistant_status(user = Depends(current_user)):
     configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
-    return {"configured": configured, "mode": "LIVE AI MODE" if configured else "LOCAL FALLBACK MODE", "model": os.getenv("GEMINI_MODEL", "gemini-3.8-flash") if configured else None}
+    return {"configured": configured, "mode": "LIVE AI MODE" if configured else "LOCAL FALLBACK MODE", "model": os.getenv("GEMINI_MODEL", "gemini-1.5-flash") if configured else None}
 
 @app.get("/api/audit-events")
 def audit_events(limit: int = 100, db: Session = Depends(get_db), user = Depends(medical)):
