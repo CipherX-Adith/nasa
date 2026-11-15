@@ -19,16 +19,16 @@ export interface DigitalTwinProps {
   onSelectOrgan: (organ: OrganKey) => void;
   astronautName?: string;
   vitals?: {
-    heartRate?: number;
-    hrv?: number;
-    systolicBp?: number;
-    diastolicBp?: number;
-    coreTemp?: number;
-    grip?: number;
-    sleepHours?: number;
-    fatigue?: number;
-    cabinCo2?: number;
-    radiation?: number;
+    heartRate?: number | null;
+    hrv?: number | null;
+    systolicBp?: number | null;
+    diastolicBp?: number | null;
+    coreTemp?: number | null;
+    grip?: number | null;
+    sleepHours?: number | null;
+    fatigue?: number | null;
+    cabinCo2?: number | null;
+    radiation?: number | null;
   };
 }
 
@@ -41,12 +41,12 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
   const [zoom, setZoom] = useState(1);
   const [hoveredOrgan, setHoveredOrgan] = useState<OrganKey | null>(null);
 
-  const hr = vitals.heartRate ?? 84.9;
-  const temp = vitals.coreTemp ?? 37.1;
-  const grip = vitals.grip ?? 44.2;
-  const sleep = vitals.sleepHours ?? 5.2;
-  const fatigue = vitals.fatigue ?? 7;
-  const co2 = vitals.cabinCo2 ?? 0.38;
+  const hr = vitals.heartRate;
+  const temp = vitals.coreTemp;
+  const grip = vitals.grip;
+  const sleep = vitals.sleepHours;
+  const fatigue = vitals.fatigue;
+  const co2 = vitals.cabinCo2;
 
   const organData: Record<
     OrganKey,
@@ -55,7 +55,7 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
       icon: any;
       metricLabel: string;
       value: string;
-      status: 'Critical' | 'Suboptimal' | 'Nominal' | 'Optimal';
+      status: 'Review trend' | 'No data';
       color: string;
       bg: string;
       glowColor: string;
@@ -66,61 +66,61 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
       title: 'Cardiovascular System',
       icon: Heart,
       metricLabel: 'Resting Heart Rate',
-      value: `${hr.toFixed(1)} BPM`,
-      status: hr > 80 ? 'Critical' : 'Nominal',
+      value: hr == null ? 'No measurement' : `${hr.toFixed(1)} BPM`,
+      status: hr == null ? 'No data' : 'Review trend',
       color: '#ef4444',
       bg: 'rgba(239, 68, 68, 0.12)',
       glowColor: 'rgba(239, 68, 68, 0.6)',
       description:
-        'Cephalad microgravity fluid shift increasing central venous pressure and elevated resting baseline drift.',
+        'Review the recorded heart-rate trend against this crew member’s personal history and the mission medical protocol.',
     },
     lungs: {
       title: 'Pulmonary & Respiratory',
       icon: Wind,
       metricLabel: 'Gas Exchange & Cabin CO2',
-      value: `${co2.toFixed(2)} kPa CO2`,
-      status: co2 > 0.45 ? 'Suboptimal' : 'Nominal',
+      value: co2 == null ? 'No measurement' : `${co2.toFixed(2)} recorded units`,
+      status: co2 == null ? 'No data' : 'Review trend',
       color: '#06b6d4',
       bg: 'rgba(6, 182, 212, 0.12)',
       glowColor: 'rgba(6, 182, 212, 0.6)',
       description:
-        'Thoracic blood pooling impacts microvascular ventilation-perfusion matching. SpO2 nominal at 98.2%.',
+        'Cabin CO₂ is an environmental measurement. Confirm its source and units before interpreting it; no sensor feed is connected in this prototype.',
     },
     brain: {
       title: 'Neurocognitive & Sleep',
       icon: Brain,
       metricLabel: 'Sleep Duration & Fatigue',
-      value: `${sleep.toFixed(1)} hrs · Fatigue ${fatigue}/10`,
-      status: sleep < 6 || fatigue > 5 ? 'Suboptimal' : 'Nominal',
+      value: `${sleep == null ? '—' : `${sleep.toFixed(1)} hrs`} · Fatigue ${fatigue == null ? '—' : `${fatigue}/10`}`,
+      status: sleep == null && fatigue == null ? 'No data' : 'Review trend',
       color: '#8b5cf6',
       bg: 'rgba(139, 92, 246, 0.12)',
       glowColor: 'rgba(139, 92, 246, 0.6)',
       description:
-        'Circadian misalignment and space motion sickness adaptation leading to elevated operational cognitive fatigue.',
+        'Review sleep and fatigue check-ins over time, together with the astronaut’s reported context and mission routine.',
     },
     muscles: {
       title: 'Musculoskeletal & Grip',
       icon: Activity,
       metricLabel: 'Grip Strength & Bone Load',
-      value: `${grip.toFixed(1)} kg force`,
-      status: grip < 40 ? 'Suboptimal' : 'Nominal',
+      value: grip == null ? 'No measurement' : `${grip.toFixed(1)} kg force`,
+      status: grip == null ? 'No data' : 'Review trend',
       color: '#10b981',
       bg: 'rgba(16, 185, 129, 0.12)',
       glowColor: 'rgba(16, 185, 129, 0.6)',
       description:
-        'Anti-gravity postural muscle unloading mitigated via daily Advanced Resistive Exercise Device (ARED) protocol.',
+        'Review repeated strength measurements against personal history and the crew’s prescribed exercise plan.',
     },
     immune: {
       title: 'Core Metabolic & Immune',
       icon: Shield,
       metricLabel: 'Core Temperature',
-      value: `${temp.toFixed(1)} °C`,
-      status: temp > 37.5 ? 'Suboptimal' : 'Nominal',
+      value: temp == null ? 'No measurement' : `${temp.toFixed(1)} °C`,
+      status: temp == null ? 'No data' : 'Review trend',
       color: '#f59e0b',
       bg: 'rgba(245, 158, 11, 0.12)',
       glowColor: 'rgba(245, 158, 11, 0.6)',
       description:
-        'Spaceflight-associated neuro-vestibular core temperature elevation (space fever phenomenon) under observation.',
+        'Review the recorded temperature, measurement conditions, and symptoms under the mission medical protocol.',
     },
   };
 
@@ -132,7 +132,7 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
         <div>
           <h3 className="digital-twin-title">Your Digital Twin Overview</h3>
           <p className="digital-twin-subtitle">
-            A personalized model uses your medical history, imaging, and real-time data to simulate and predict heart function.
+            Prototype visualization of recorded measurements and self-reports. It does not model or predict organ function.
           </p>
         </div>
         <button
@@ -655,7 +655,7 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
               {active.metricLabel}: <b>{active.value}</b>
             </div>
           </div>
-          <span className={`status-pill ${active.status.toLowerCase()}`}>
+          <span className={`status-pill ${active.status.toLowerCase().replace(' ', '-')}`}>
             {active.status}
           </span>
         </div>

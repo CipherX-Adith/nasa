@@ -15,6 +15,7 @@ import {
   Atom,
   BadgeCheck,
   Brain,
+  BookOpen,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -42,6 +43,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { OrganKey } from './components/DigitalTwinViewer';
+import { challengeGuidance, challengeResources } from './challengeResources';
 import {
   isFirebaseEnabled,
   subscribeToAssessments,
@@ -763,16 +765,16 @@ export default function App() {
   // Real-time multi-domain vitals for the Digital Twin anatomical model
   const liveVitals = useMemo(() => {
     return {
-      heartRate: latest('Resting heart rate')?.value ?? 84.9,
-      hrv: latest('Heart rate variability')?.value ?? 42.1,
-      systolicBp: latest('Systolic blood pressure')?.value ?? 130,
-      diastolicBp: 85,
-      coreTemp: latest('Core body temperature')?.value ?? 37.1,
-      grip: latest('Grip strength')?.value ?? 44.2,
-      sleepHours: latest('Sleep duration')?.value ?? 5.2,
-      fatigue: latest('Fatigue')?.value ?? 7,
-      cabinCo2: latest('Cabin CO2')?.value ?? 0.38,
-      radiation: latest('Radiation dose rate')?.value ?? 0.42,
+      heartRate: latest('Resting heart rate')?.value ?? null,
+      hrv: latest('Heart rate variability')?.value ?? latest('HRV')?.value ?? null,
+      systolicBp: latest('Systolic blood pressure')?.value ?? latest('Systolic BP')?.value ?? null,
+      diastolicBp: latest('Diastolic blood pressure')?.value ?? null,
+      coreTemp: latest('Core body temperature')?.value ?? latest('Core Temp')?.value ?? null,
+      grip: latest('Grip strength')?.value ?? latest('Grip')?.value ?? null,
+      sleepHours: latest('Sleep duration')?.value ?? null,
+      fatigue: latest('Fatigue')?.value ?? null,
+      cabinCo2: latest('Cabin CO2')?.value ?? null,
+      radiation: latest('Radiation dose rate')?.value ?? null,
     };
   }, [measurements]);
 
@@ -1287,23 +1289,18 @@ export default function App() {
 
     return assessmentsList.map((a: Any, idx: number) => {
       let val = a.sleep_hours;
-      let isAnomaly = false;
+      const isAnomaly = false;
 
       if (behaviouralMetric === 'Fatigue') {
         val = a.fatigue;
-        isAnomaly = a.fatigue >= 5;
       } else if (behaviouralMetric === 'Stress') {
         val = a.stress;
-        isAnomaly = a.stress >= 5;
       } else if (behaviouralMetric === 'Mood') {
         val = a.mood;
-        isAnomaly = a.mood <= 4;
       } else if (behaviouralMetric === 'Sleep Quality') {
         val = a.sleep_quality;
-        isAnomaly = a.sleep_quality <= 4;
       } else {
         val = a.sleep_hours;
-        isAnomaly = a.sleep_hours < 6.0;
       }
 
       return {
@@ -1332,7 +1329,7 @@ export default function App() {
         const val = count ? Number(calcAvg('fatigue').toFixed(1)) : 0;
         return {
           unit: '/10',
-          targetLabel: `Historical avg: ${val}/10 (Nominal: <= 3/10)`,
+          targetLabel: `Personal historical average: ${count ? `${val}/10` : 'building baseline'} · no clinical threshold applied`,
           baselineVal: val,
           color: '#ef4444',
           yDomain: [0, 10],
@@ -1343,7 +1340,7 @@ export default function App() {
         const val = count ? Number(calcAvg('stress').toFixed(1)) : 0;
         return {
           unit: '/10',
-          targetLabel: `Historical avg: ${val}/10 (Nominal: <= 4/10)`,
+          targetLabel: `Personal historical average: ${count ? `${val}/10` : 'building baseline'} · no clinical threshold applied`,
           baselineVal: val,
           color: '#f59e0b',
           yDomain: [0, 10],
@@ -1354,7 +1351,7 @@ export default function App() {
         const val = count ? Number(calcAvg('mood').toFixed(1)) : 0;
         return {
           unit: '/10',
-          targetLabel: `Historical avg: ${val}/10 (Nominal: >= 7/10)`,
+          targetLabel: `Personal historical average: ${count ? `${val}/10` : 'building baseline'} · no clinical threshold applied`,
           baselineVal: val,
           color: '#10b981',
           yDomain: [0, 10],
@@ -1365,7 +1362,7 @@ export default function App() {
         const val = count ? Number(calcAvg('sleep_quality').toFixed(1)) : 0;
         return {
           unit: '/10',
-          targetLabel: `Historical avg: ${val}/10 (Nominal: >= 7/10)`,
+          targetLabel: `Personal historical average: ${count ? `${val}/10` : 'building baseline'} · no clinical threshold applied`,
           baselineVal: val,
           color: '#8b5cf6',
           yDomain: [0, 10],
@@ -1377,7 +1374,7 @@ export default function App() {
         const val = count ? Number(calcAvg('sleep_hours').toFixed(1)) : 0;
         return {
           unit: 'hrs',
-          targetLabel: `Historical avg: ${val} hrs (Target: 7.0 – 8.5 hrs)`,
+          targetLabel: `Personal historical average: ${count ? `${val} hrs` : 'building baseline'} · no clinical threshold applied`,
           baselineVal: val,
           color: '#0284c7',
           yDomain: [0, 12],
@@ -1855,8 +1852,8 @@ export default function App() {
               {isHourly
                 ? `Illustrative generated hourly profile for ${astronaut?.name || 'astronaut'} · Mars Transit Day 42`
                 : (isAdmin
-                  ? `Tracking longitudinal adaptation for ${astronaut?.name || 'astronaut'} relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`
-                  : `Tracking your personal adaptation relative to calibrated normal range (${telemetryData.median} ${telemetryData.unit})`)}
+                  ? `Comparing recorded history for ${astronaut?.name || 'astronaut'} with their personal baseline (${telemetryData.median} ${telemetryData.unit})`
+                  : `Comparing your recorded history with your personal baseline (${telemetryData.median} ${telemetryData.unit})`)}
             </p>
           </div>
 
@@ -2622,6 +2619,7 @@ export default function App() {
             [HeartPulse, 'Cardiovascular'],
             [Wind, 'Behavioural'],
             [Clock3, 'Mission timeline'],
+            [BookOpen, 'Challenge resources'],
             [FileText, 'Medical records'],
             [MessageCircle, 'AI assistant'],
             ...(isAdmin ? [[UserCheck, 'Crew accounts']] : []),
@@ -2681,6 +2679,37 @@ export default function App() {
             </div>
           )}
 
+          {tab === 'Challenge resources' && (
+            <section style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 0' }}>
+              <div className="heading-row">
+                <div>
+                  <h1>Challenge resources</h1>
+                  <p className="muted">NASA and Canadian Space Agency references that inform ORBITCARE’s monitoring context.</p>
+                </div>
+              </div>
+              <div style={{ padding: 16, margin: '16px 0 22px', borderRadius: 12, border: '1px solid rgba(59,130,246,.35)', background: 'rgba(59,130,246,.08)' }}>
+                <strong>Evidence and demo data are different</strong>
+                <p style={{ margin: '8px 0 0' }}>These five challenge resources are research and explanatory pages, not downloadable crew telemetry. They guide what ORBITCARE monitors and how it frames risk. Sample mission measurements remain clearly marked synthetic because these pages do not provide individual readings.</p>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+                {challengeResources.map((resource) => (
+                  <article key={resource.title} className="stat" style={{ minHeight: 220, textAlign: 'left' }}>
+                    <small style={{ color: 'var(--text-muted, #64748b)' }}>{resource.agency}</small>
+                    <h2 style={{ fontSize: 18, margin: '8px 0' }}>{resource.title}</h2>
+                    <p>{resource.summary}</p>
+                    <ul style={{ paddingLeft: 20 }}>{resource.relevance.map((item) => <li key={item} style={{ margin: '6px 0' }}>{item}</li>)}</ul>
+                    <a href={resource.url} target="_blank" rel="noreferrer">Open source ↗</a>
+                  </article>
+                ))}
+              </div>
+              <article className="stat" style={{ marginTop: 18, textAlign: 'left' }}>
+                <h2 style={{ fontSize: 18 }}>ORBITCARE review steps</h2>
+                <ol style={{ paddingLeft: 22 }}>{challengeGuidance.map((item) => <li key={item} style={{ margin: '8px 0' }}>{item}</li>)}</ol>
+                <small>Prototype guidance only; follow mission procedures and clinician instructions.</small>
+              </article>
+            </section>
+          )}
+
           {/* OVERVIEW TAB CONTENT */}
           {tab === 'Overview' && (
             <>
@@ -2691,8 +2720,8 @@ export default function App() {
                   </h1>
                   <p className="muted">
                     {isAdmin
-                      ? `Real-time bio-telemetry, cardiac parameters, and longitudinal adaptation for Mars Transit crew.`
-                      : `Personal real-time bio-telemetry, baseline drift, and vital signals for ${astronaut?.name}.`}
+                      ? `Recorded health indicators and personal trends for the Mars Transit demo crew.`
+                      : `Recorded health indicators and personal trends for ${astronaut?.name}.`}
                   </p>
                 </div>
 
@@ -2707,10 +2736,10 @@ export default function App() {
                     <HeartPulse size={22} style={{ color: '#ff0055' }} />
                   </div>
                   <strong>
-                    {latest('Resting heart rate')?.value ?? '82'} <small>bpm</small>
+                    {latest('Resting heart rate')?.value ?? '—'} <small>bpm</small>
                   </strong>
                   <div className="stat-foot">
-                    Resting frequency · Nominal baseline
+                    {latest('Resting heart rate')?.simulated ? 'Synthetic demo sample' : 'Latest recorded measurement'}
                   </div>
                 </div>
 
@@ -2720,10 +2749,10 @@ export default function App() {
                     <Activity size={22} style={{ color: '#0066ff' }} />
                   </div>
                   <strong>
-                    {latest('Systolic BP')?.value ?? '120'}/80 <small>mmHg</small>
+                    {latest('Systolic BP')?.value ?? '—'} <small>mmHg</small>
                   </strong>
                   <div className="stat-foot">
-                    Arterial baseline · 120/80 target
+                    Systolic measurement only · no fixed target shown
                   </div>
                 </div>
 
@@ -2733,7 +2762,7 @@ export default function App() {
                     <Wind size={22} style={{ color: '#7c3aed' }} />
                   </div>
                   <strong>
-                    {latest('HRV')?.value ?? '42'} <small>ms</small>
+                    {latest('HRV')?.value ?? '—'} <small>ms</small>
                   </strong>
                   <div className="stat-foot">
                     Parasympathetic vagal resilience
@@ -2746,10 +2775,10 @@ export default function App() {
                     <Clock3 size={22} style={{ color: '#10b981' }} />
                   </div>
                   <strong>
-                    {latestAssessment.sleep_hours ?? '7.5'} <small>hrs</small>
+                    {latestAssessment.sleep_hours ?? '—'} <small>hrs</small>
                   </strong>
                   <div className="stat-foot">
-                    Mars Transit Day 42 · Sleep nominal
+                    Self-reported sleep · review against personal history
                   </div>
                 </div>
               </div>
@@ -2762,7 +2791,7 @@ export default function App() {
                 <div className="quick-dock-info">
                   <Activity size={18} style={{ color: '#0066ff' }} />
                   <span>
-                    Mission Day 042 Telemetry · Physiological parameters verified nominal
+                    Demo mission data · measurement status depends on recorded source and quality
                   </span>
                 </div>
                 <div className="quick-dock-actions">
@@ -2888,9 +2917,9 @@ export default function App() {
                   <strong>
                     {avgSleep7Days} <small>hrs/night</small>
                   </strong>
-                  <div className={`stat-foot ${+avgSleep7Days < 6.5 ? 'amber' : ''}`}>
-                    <i style={{ background: +avgSleep7Days < 6.5 ? '#f59e0b' : '#10b981' }} />
-                    {+avgSleep7Days < 6.5 ? 'Rest deficit detected' : 'Target: >= 7.0 hrs'}
+                  <div className="stat-foot">
+                    <i />
+                    {avgSleep7Days === '--' ? 'No recent sleep check-ins' : 'Compare this trend with your personal history'}
                   </div>
                 </div>
 
@@ -2900,11 +2929,11 @@ export default function App() {
                     <Activity size={17} />
                   </div>
                   <strong>
-                    {latestAssessment.fatigue ?? 2} <small>/ 10</small>
+                    {latestAssessment.fatigue ?? '—'} <small>/ 10</small>
                   </strong>
-                  <div className={`stat-foot ${(latestAssessment.fatigue ?? 0) >= 5 ? 'amber' : ''}`}>
-                    <i style={{ background: (latestAssessment.fatigue ?? 0) >= 5 ? '#ef4444' : '#10b981' }} />
-                    {(latestAssessment.fatigue ?? 0) >= 5 ? 'Elevated cognitive strain' : 'Nominal operational level'}
+                  <div className="stat-foot">
+                    <i />
+                    {latestAssessment.fatigue == null ? 'No fatigue check-in' : 'Self-reported value · review trend and context'}
                   </div>
                 </div>
 
@@ -2914,10 +2943,10 @@ export default function App() {
                     <Wind size={17} />
                   </div>
                   <strong>
-                    {latestAssessment.stress ?? 3} <small>/ 10</small>
+                    {latestAssessment.stress ?? '—'} <small>/ 10</small>
                   </strong>
                   <div className="stat-foot">
-                    <i /> Operational limit: &lt;= 5/10
+                    <i /> Self-reported value · compare with personal history
                   </div>
                 </div>
 
@@ -2927,7 +2956,7 @@ export default function App() {
                     <Check size={17} />
                   </div>
                   <strong>
-                    {latestAssessment.mood ?? 7} <small>/ 10</small>
+                    {latestAssessment.mood ?? '—'} <small>/ 10</small>
                   </strong>
                   <div className="stat-foot">
                     <i /> Self-reported readiness
@@ -2942,7 +2971,7 @@ export default function App() {
                     <div className="telemetry-title-row">
                       <h2>Neurocognitive & Sleep Adaptation Trend</h2>
                       <span className="telemetry-badge">
-                        {assessmentsList.length || 42}-Day Longitudinal Self-Reports
+                        {assessmentsList.length}-Day Longitudinal Self-Reports
                       </span>
                     </div>
                     <p className="telemetry-subtitle">

@@ -31,8 +31,9 @@ def seed(db):
         ("radiation_environment", "Radiation dose rate", "mSv/day", 0.42),
     ]
 
-    # Explicitly simulated Mars Transit — Day 42 demo. Days 1–39 provide
-    # illustrative baselines; the final values match the project brief.
+    # Explicitly synthetic scenario data for the Mars Transit demo. These
+    # values are not sourced from the challenge's NASA/CSA resource pages,
+    # which provide research context rather than individual telemetry files.
     maya_hr_curve = {
         1: 65.4, 2: 65.8, 3: 65.1, 4: 66.2, 5: 65.4, 6: 64.9, 7: 65.7, 8: 66.5, 9: 65.0, 10: 64.8,
         11: 65.3, 12: 66.1, 13: 65.5, 14: 64.9, 15: 65.4, 16: 65.9, 17: 64.7, 18: 65.3, 19: 66.4, 20: 65.8,
@@ -121,7 +122,7 @@ def seed(db):
                         value=round(val, 2),
                         unit=unit,
                         timestamp=timestamp,
-                        source="Simulated mission telemetry",
+                        source="Synthetic demo scenario (not NASA/CSA telemetry)",
                         simulated=True,
                     )
                 )

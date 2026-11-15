@@ -6508,3 +6508,90 @@ textarea {
     height: 430px;
   }
 }
+
+/* Responsive layout safeguards */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+@media (max-width: 1180px) {
+  .content { padding: 32px 30px 88px; }
+  .stats { gap: 16px; margin-bottom: 28px; }
+  .stat { padding: 22px; }
+  .telemetry-card { padding: 28px; margin-bottom: 28px; }
+  .grid-main, .grid-lower { gap: 18px; }
+  .header-crew-controls { width: 100%; justify-content: flex-start; }
+}
+
+@media (max-width: 900px) {
+  .content { padding: 26px 20px 72px; }
+  .heading-row { margin-bottom: 26px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-main, .grid-lower { grid-template-columns: 1fr; }
+  .grid-lower .panel[style] { grid-column: auto !important; }
+  .telemetry-head { margin-bottom: 18px; }
+  .telemetry-pills, .telemetry-mode-toggle { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .telemetry-pills::-webkit-scrollbar, .telemetry-mode-toggle::-webkit-scrollbar { display: none; }
+  .telemetry-pill-btn { flex: 0 0 auto; padding: 8px 14px; }
+  .report-systems-grid { grid-template-columns: 1fr; }
+  .clinical-modal-card { width: min(100%, 860px); max-height: calc(100svh - 24px); }
+  .clinical-modal-body { padding: 18px; }
+}
+
+@media (max-width: 700px) {
+  .fixed-brand-anchor { left: 12px; top: 12px; }
+  .brand-logo-fixed, .nav-arrow-trigger { width: 126px; }
+  .brand-logo-fixed { height: auto; }
+  .arrow-trigger-text { font-size: 8px; }
+  .topbar { min-height: 64px; height: auto; padding: 8px 12px 8px 150px; }
+  .topbar-left { min-width: 0; }
+  .topbar-nav, .crumb, .topbar-clock, .live-sync-pill { display: none; }
+  .topbar-right { margin-left: auto; gap: 7px; }
+  .topbar-user-wrap { padding-left: 7px; }
+  .topbar-user-name, .topbar-user-callsign { display: none; }
+  .content { padding: 22px 14px 64px; }
+  .heading-row h1 { font-size: 25px; }
+  .muted { font-size: 13px; }
+  .personal-badge-card { width: 100%; min-width: 0; }
+  .header-crew-controls { gap: 8px !important; }
+  .btn-clinical-report, .btn-download-report { min-height: 38px; padding: 8px 11px; font-size: 11px; }
+  .telemetry-card { border-radius: 16px; padding: 18px 14px; }
+  .telemetry-title-row h2 { font-size: 20px; }
+  .telemetry-subtitle { font-size: 13px; }
+  .telemetry-chart-container { height: 280px; margin-top: 8px; }
+  .telemetry-footer, .telemetry-legend { gap: 10px; font-size: 11px; }
+  .stats { gap: 10px; }
+  .stat { min-width: 0; padding: 16px 14px; border-radius: 14px; }
+  .stat strong { margin: 10px 0 6px; font-size: 27px; }
+  .stat strong small { display: block; margin: 2px 0 0; font-size: 11px; }
+  .stat-top { font-size: 9px; letter-spacing: .05em; }
+  .stat-foot { font-size: 11px; line-height: 1.35; }
+  .panel { border-radius: 14px; padding: 15px; }
+  .panel-head { align-items: flex-start; }
+  .panel-head h2 { font-size: 16px; }
+  .domain-grid { grid-template-columns: 1fr; }
+  .overview-quick-dock, .quick-dock-actions { flex-direction: column; align-items: stretch; }
+  .dock-action-btn { justify-content: center; }
+  .timeline-row { grid-template-columns: 72px 54px minmax(0, 1fr); font-size: 11px; }
+  .table-wrap, .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 640px; }
+  .assistant-page-head h1 { font-size: 25px; }
+  .assistant-chat-card { padding: 16px; }
+  .assistant-suggestions { align-items: flex-start; }
+  .assistant-context-bar { flex-wrap: wrap; }
+}
+
+@media (max-width: 440px) {
+  .topbar { padding-left: 138px; }
+  .fixed-brand-anchor { left: 8px; }
+  .brand-logo-fixed, .nav-arrow-trigger { width: 114px; }
+  .theme-toggle-floating { right: 10px; top: 10px; }
+  .stats { grid-template-columns: 1fr; }
+  .telemetry-pills { border-radius: 12px; }
+  .telemetry-pill-btn { font-size: 12px; }
+  .telemetry-chart-container { height: 245px; }
+  .assistant-report-btn { width: 100%; justify-content: center; }
+  .assistant-chat-title { align-items: flex-start; }
+  .assistant-context-bar > span:nth-of-type(2) { display: none; }
+  .login-card { width: min(100% - 28px, 384px); }
+  .login-quick-pills { grid-template-columns: 1fr; }
+  .auth-tab-btn { font-size: 10px; }
+}
