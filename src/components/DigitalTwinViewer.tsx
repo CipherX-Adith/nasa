@@ -113,14 +113,14 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
     immune: {
       title: 'Core Metabolic & Immune',
       icon: Shield,
-      metricLabel: 'Core Temperature',
+      metricLabel: 'Core Temperature · Environmental Radiation Context',
       value: temp == null ? 'No measurement' : `${temp.toFixed(1)} °C`,
       status: temp == null ? 'No data' : 'Review trend',
       color: '#f59e0b',
       bg: 'rgba(245, 158, 11, 0.12)',
       glowColor: 'rgba(245, 158, 11, 0.6)',
       description:
-        'Review the recorded temperature, measurement conditions, and symptoms under the mission medical protocol.',
+        'Review recorded temperature, measurement conditions, and symptoms under the mission medical protocol. Radiation exposure is tracked separately as an environmental measure, not an immune-system reading.',
     },
   };
 

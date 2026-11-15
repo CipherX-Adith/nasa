@@ -42,7 +42,7 @@ import {
   Wind,
   XCircle,
 } from 'lucide-react';
-import type { OrganKey } from './components/DigitalTwinViewer';
+import { DigitalTwinViewer, type OrganKey } from './components/DigitalTwinViewer';
 import { challengeGuidance, challengeResources } from './challengeResources';
 import {
   isFirebaseEnabled,
@@ -72,6 +72,22 @@ import {
 const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000/api' : '/api');
 const API = API_BASE.replace(/\/+$/, '');
 type Any = Record<string, any>;
+
+const MISSION_ENVIRONMENTS = {
+  transit: {
+    label: 'Deep-space transit', mission: 'Asteria-7', gravity: 'Microgravity',
+    summary: 'Long communication delays and radiation context. Review cardiovascular, sleep, strength, and environmental trends.',
+  },
+  leo: {
+    label: 'Space station / LEO', mission: 'Low Earth Orbit', gravity: 'Microgravity',
+    summary: 'Focus on adaptation, exercise adherence, sleep routine, and recorded physiological trends with ground support available.',
+  },
+  mars: {
+    label: 'Mars surface base', mission: 'Mars Surface Outpost', gravity: 'Approximately 0.38g',
+    summary: 'Focus on mobility, strength, exercise, habitat conditions, and environmental observations during surface operations.',
+  },
+} as const;
+type EnvironmentKey = keyof typeof MISSION_ENVIRONMENTS;
 
 const fmt = (s: string) =>
   new Date(s).toLocaleString([], {
@@ -170,6 +186,7 @@ export default function App() {
 
   // Interactive Digital Twin active organ state (synchronized with telemetry graphs)
   const [selectedOrgan, setSelectedOrgan] = useState<OrganKey>('heart');
+  const [environment, setEnvironment] = useState<EnvironmentKey>('transit');
 
   // Collapsible navigation popup menu triggered by arrow mark under the logo
   const [navPopupOpen, setNavPopupOpen] = useState(false);
@@ -300,6 +317,11 @@ export default function App() {
 
   // Medical records returned by the authenticated API
   const [medicalRecords, setMedicalRecords] = useState<Any[]>([]);
+  const [ultrasoundOpen, setUltrasoundOpen] = useState(false);
+  const [ultrasoundType, setUltrasoundType] = useState<'optic' | 'muscle'>('optic');
+  const [ultrasoundObservation, setUltrasoundObservation] = useState('');
+  const [ultrasoundSaving, setUltrasoundSaving] = useState(false);
+  const [ultrasoundFeedback, setUltrasoundFeedback] = useState('');
   const [showAddMedRecordModal, setShowAddMedRecordModal] = useState(false);
   const [newMedRecord, setNewMedRecord] = useState({
     record_type: 'Clinical Evaluation',
@@ -327,7 +349,7 @@ export default function App() {
     } else if (organ === 'muscles') {
       setSelectedMetric('Grip');
     } else if (organ === 'immune') {
-      setSelectedMetric('Radiation dose rate');
+      setSelectedMetric('Core Temp');
     }
   };
 
@@ -339,7 +361,7 @@ export default function App() {
       setSelectedOrgan('lungs');
     } else if (['Sleep duration', 'Fatigue', 'Sleep quality', 'Stress', 'Mood'].includes(selectedMetric)) {
       setSelectedOrgan('brain');
-    } else if (['Grip'].includes(selectedMetric)) {
+    } else if (['Grip', 'Body mass'].includes(selectedMetric)) {
       setSelectedOrgan('muscles');
     } else if (['Radiation dose rate', 'Core Temp'].includes(selectedMetric)) {
       setSelectedOrgan('immune');
@@ -356,6 +378,8 @@ export default function App() {
 
   // Astronaut Role: Daily Countermeasure Adherence state
   const [adherenceChecks, setAdherenceChecks] = useState<Record<string, boolean>>({});
+  const [adherenceHistory, setAdherenceHistory] = useState<Any[]>([]);
+  const [adherenceSummary, setAdherenceSummary] = useState<Any | null>(null);
   const [adherenceDate, setAdherenceDate] = useState(new Date().toISOString().slice(0, 10));
   const [adherenceLoading, setAdherenceLoading] = useState(false);
   const [adherenceError, setAdherenceError] = useState('');
@@ -600,6 +624,34 @@ export default function App() {
     }
   }
 
+  async function saveSimulatedUltrasound() {
+    const aid = selected || astronaut?.id;
+    if (!aid || !ultrasoundObservation.trim()) return;
+    setUltrasoundSaving(true);
+    setUltrasoundFeedback('');
+    const examName = ultrasoundType === 'optic' ? 'Optic nerve sheath inspection' : 'Muscle cross-section inspection';
+    try {
+      await api(`/astronauts/${aid}/medical-records`, {
+        method: 'POST',
+        body: JSON.stringify({
+          record_type: 'Simulated ultrasound inspection',
+          title: examName,
+          findings: `SIMULATED TRAINING OBSERVATION — no image acquisition or diagnostic interpretation was performed. ${ultrasoundObservation.trim()}`,
+          countermeasures: '',
+          status: 'Pending clinician review',
+          date: new Date().toISOString().slice(0, 10),
+        }),
+      });
+      setUltrasoundFeedback('Saved as a pending clinician-review record.');
+      setUltrasoundObservation('');
+      await load();
+    } catch (e: any) {
+      setUltrasoundFeedback(e.message || 'Could not save the inspection record.');
+    } finally {
+      setUltrasoundSaving(false);
+    }
+  }
+
   async function load() {
     if (!token) return;
     try {
@@ -786,8 +838,8 @@ export default function App() {
     if (tab === 'Behavioural') {
       return ['Sleep duration', 'Fatigue', 'Sleep quality', 'Stress', 'Mood'];
     }
-    // Overview tab: features all primary vital metrics from the reference screenshot
-    return ['Heart Rate', 'HRV', 'Systolic BP', 'Core Temp', 'Grip', 'Sleep duration', 'Fatigue'];
+    // Overview exposes all anatomy-linked metrics so the shared chart remains in sync.
+    return ['Heart Rate', 'HRV', 'Systolic BP', 'Cabin CO2', 'Sleep duration', 'Fatigue', 'Stress', 'Mood', 'Grip', 'Body mass', 'Core Temp', 'Radiation dose rate'];
   }, [tab]);
 
   // Handle switching tabs
@@ -1572,6 +1624,8 @@ export default function App() {
     try {
       const result = await api(`/astronauts/${user.astronaut_id}/countermeasures?date=${adherenceDate}`);
       setAdherenceChecks(Object.fromEntries((result.items || []).map((item: Any) => [item.key, !!item.check?.completed])));
+      setAdherenceHistory(result.history || []);
+      setAdherenceSummary(result.gamification || null);
     } catch (e: any) {
       setAdherenceError(e.message || 'Could not load checklist records.');
     } finally { setAdherenceLoading(false); }
@@ -1587,11 +1641,21 @@ export default function App() {
         method: 'PUT', body: JSON.stringify({ completed: !adherenceChecks[key] }),
       });
       setAdherenceChecks((prev) => ({ ...prev, [key]: !prev[key] }));
+      await loadCountermeasures();
     } catch (e: any) { setAdherenceError(e.message || 'Could not save checklist update.'); }
   };
 
   const adherenceCompletedCount = Object.values(adherenceChecks).filter(Boolean).length;
   const adherencePercent = Math.round((adherenceCompletedCount / 4) * 100);
+  const adherenceBadges = useMemo(() => {
+    const completedKeys = new Set(adherenceHistory.filter((item: Any) => item.completed).map((item: Any) => item.protocol_key));
+    const badges = [];
+    if (completedKeys.has('resistance')) badges.push('Microgravity Resistance');
+    if (completedKeys.has('sleep')) badges.push('Circadian Check-in');
+    if (completedKeys.has('hydration')) badges.push('Hydration Routine');
+    if ((adherenceSummary?.current_streak || 0) >= 3) badges.push('Mission Wellness Streak');
+    return badges;
+  }, [adherenceHistory, adherenceSummary]);
 
   // Astronaut Telemedicine Request transmission
   const handleSendConsult = async () => {
@@ -1702,11 +1766,17 @@ export default function App() {
             </div>
           </div>
           <div className="adherence-bar-container">
-            <div className="adherence-progress-track">
-              <div className="adherence-progress-fill" style={{ width: `${adherencePercent}%` }} />
+            <div className="adherence-progress-ring" style={{ '--progress': `${adherencePercent * 3.6}deg` } as React.CSSProperties} aria-label={`${adherencePercent}% of daily routine recorded`}>
+              <span>{adherencePercent}%</span>
             </div>
-            <span className="adherence-percent">{adherencePercent}% recorded ({adherenceCompletedCount}/4)</span>
+            <span className="adherence-percent">{adherenceCompletedCount}/4 recorded</span>
           </div>
+        </div>
+
+        <div className="adherence-summary" aria-label="Routine adherence summary">
+          <span>🔥 {adherenceSummary?.current_streak || 0}-day completed-routine streak</span>
+          <span>Weekly completion: {adherenceSummary?.weekly_complete_days || 0}/7 days</span>
+          {adherenceSummary?.available_history_days === 0 && <span>Streak tracking begins with saved check-ins.</span>}
         </div>
 
         <div className="countermeasure-checklist">
@@ -1740,6 +1810,11 @@ export default function App() {
           <label>Checklist date <input type="date" value={adherenceDate} onChange={(e) => setAdherenceDate(e.target.value)} /></label>
           <small>Self-reported completion; these items do not prescribe duration, dose, or treatment.</small>
         </div>
+        {adherenceBadges.length > 0 && (
+          <div className="adherence-badges" aria-label="Earned adherence milestones">
+            {adherenceBadges.map((badge) => <span key={badge}>✓ {badge}</span>)}
+          </div>
+        )}
         {adherenceError && <p className="error">{adherenceError}</p>}
       </div>
     );
@@ -2728,6 +2803,20 @@ export default function App() {
                 {renderHeaderCrewControls()}
               </div>
 
+              <section className="mission-context-card" aria-label="Mission environment context">
+                <div>
+                  <span className="mission-context-label">MISSION ENVIRONMENT · ILLUSTRATIVE CONTEXT</span>
+                  <h2>{MISSION_ENVIRONMENTS[environment].label}</h2>
+                  <p>{MISSION_ENVIRONMENTS[environment].mission} · {MISSION_ENVIRONMENTS[environment].gravity} · {MISSION_ENVIRONMENTS[environment].summary}</p>
+                </div>
+                <label className="environment-selector">
+                  <span>Scenario</span>
+                  <select value={environment} onChange={(e) => setEnvironment(e.target.value as EnvironmentKey)}>
+                    {Object.entries(MISSION_ENVIRONMENTS).map(([key, item]) => <option value={key} key={key}>{item.label}</option>)}
+                  </select>
+                </label>
+              </section>
+
               {/* PRIMARY VITALS ROW: LARGE, CLEAN, AND SPACIOUS */}
               <div className="stats">
                 <div className="stat">
@@ -2785,6 +2874,13 @@ export default function App() {
 
               {/* Mission Telemetry Trend Graph - Hero Feature */}
               {renderTelemetryCard()}
+
+              <DigitalTwinViewer
+                selectedOrgan={selectedOrgan}
+                onSelectOrgan={handleSelectOrgan}
+                astronautName={astronaut?.name}
+                vitals={liveVitals}
+              />
 
               {/* SOLID CURVED QUICK JUMP DOCK */}
               <div className="overview-quick-dock">
@@ -3407,7 +3503,15 @@ export default function App() {
                   </p>
                 </div>
                 {renderHeaderCrewControls(
-                  isAdmin && (
+                  isAdmin && (<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ width: 'auto', padding: '11px 14px', display: 'inline-flex', alignItems: 'center', gap: 7, borderRadius: '10px', font: "700 13.5px 'DM Sans', sans-serif" }}
+                      onClick={() => { setUltrasoundFeedback(''); setUltrasoundOpen(true); }}
+                    >
+                      <Activity size={16} /> Simulated ultrasound
+                    </button>
                     <button
                       type="button"
                       className="btn-approve"
@@ -3417,7 +3521,7 @@ export default function App() {
                       <FilePlus size={16} />
                       {showAddMedRecordModal ? 'Close Form' : '+ Add Clinical Evaluation'}
                     </button>
-                  )
+                  </div>)
                 )}
               </div>
 
@@ -3916,6 +4020,44 @@ export default function App() {
 
       {/* NASA Flight Surgeon Daily Clinical Health Report Modal */}
       {renderDailyReportModal()}
+
+      {ultrasoundOpen && isAdmin && (
+        <div className="clinical-modal-overlay" onClick={() => setUltrasoundOpen(false)}>
+          <section className="clinical-modal-card ultrasound-modal" onClick={(e) => e.stopPropagation()} aria-label="Simulated ultrasound inspection">
+            <div className="clinical-modal-head">
+              <div>
+                <div className="clinical-modal-brand">ORBITCARE · TRAINING SIMULATION</div>
+                <h2 className="clinical-modal-title">Ultrasound inspection</h2>
+                <p className="clinical-modal-sub">Illustrative examination workflow for medical review. This prototype does not acquire, analyze, or diagnose ultrasound images.</p>
+              </div>
+              <button type="button" className="clinical-modal-close" onClick={() => setUltrasoundOpen(false)}>✕</button>
+            </div>
+            <div className="clinical-modal-body ultrasound-layout">
+              <div className="ultrasound-sample" aria-label="Illustrative simulated ultrasound pattern">
+                <span>SIMULATED SAMPLE</span><span>NOT A PATIENT IMAGE</span><div className="ultrasound-scanlines" />
+              </div>
+              <div className="ultrasound-form">
+                <label>Examination type
+                  <select value={ultrasoundType} onChange={(e) => setUltrasoundType(e.target.value as 'optic' | 'muscle')}>
+                    <option value="optic">Optic nerve sheath inspection (SANS context)</option>
+                    <option value="muscle">Muscle cross-section inspection (adaptation context)</option>
+                  </select>
+                </label>
+                <p>{ultrasoundType === 'optic'
+                  ? 'Use this simulation to document a clinician-entered observation for a neuro-ocular review; it does not measure optic nerve sheath diameter.'
+                  : 'Use this simulation to document a clinician-entered observation for a musculoskeletal review; it does not measure muscle area.'}</p>
+                <label>Illustrative observation for review
+                  <textarea rows={4} value={ultrasoundObservation} onChange={(e) => setUltrasoundObservation(e.target.value)} placeholder="Describe the simulated training observation and any planned review." />
+                </label>
+                {ultrasoundFeedback && <p className={ultrasoundFeedback.startsWith('Saved') ? 'success' : 'error'}>{ultrasoundFeedback}</p>}
+                <button type="button" className="btn-approve" disabled={ultrasoundSaving || !ultrasoundObservation.trim()} onClick={saveSimulatedUltrasound}>
+                  {ultrasoundSaving ? 'Saving…' : 'Save pending-review record'}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* Astronaut Telemedicine Request Modal */}
       {consultModalOpen && (
