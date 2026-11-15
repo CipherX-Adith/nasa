@@ -13,23 +13,24 @@ import {
 } from 'lucide-react';
 
 export type OrganKey = 'heart' | 'lungs' | 'brain' | 'muscles' | 'immune';
+export type TwinStatus = 'nominal' | 'review' | 'priority' | 'recorded' | 'nodata';
+
+export interface TwinVitals {
+  heartRate?: number | null; hrv?: number | null; systolicBp?: number | null;
+  diastolicBp?: number | null; coreTemp?: number | null; grip?: number | null;
+  sleepHours?: number | null; fatigue?: number | null; cabinCo2?: number | null;
+  radiation?: number | null; respiration?: number | null; spo2?: number | null;
+}
 
 export interface DigitalTwinProps {
   selectedOrgan: OrganKey;
   onSelectOrgan: (organ: OrganKey) => void;
   astronautName?: string;
-  vitals?: {
-    heartRate?: number | null;
-    hrv?: number | null;
-    systolicBp?: number | null;
-    diastolicBp?: number | null;
-    coreTemp?: number | null;
-    grip?: number | null;
-    sleepHours?: number | null;
-    fatigue?: number | null;
-    cabinCo2?: number | null;
-    radiation?: number | null;
-  };
+  vitals?: TwinVitals;
+  baselines?: TwinVitals;
+  organStatus?: Partial<Record<OrganKey, TwinStatus>>;
+  missionDay?: number;
+  dataSource?: 'simulated' | 'real' | 'mixed';
 }
 
 export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
@@ -37,6 +38,10 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
   onSelectOrgan,
   astronautName = 'Maya Chen',
   vitals = {},
+  baselines = {},
+  organStatus = {},
+  missionDay,
+  dataSource = 'simulated',
 }) => {
   const [zoom, setZoom] = useState(1);
   const [hoveredOrgan, setHoveredOrgan] = useState<OrganKey | null>(null);
@@ -47,6 +52,14 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
   const sleep = vitals.sleepHours;
   const fatigue = vitals.fatigue;
   const co2 = vitals.cabinCo2;
+  const statusFor = (organ: OrganKey, current: number | null | undefined, base: number | null | undefined): TwinStatus => {
+    if (organStatus[organ]) return organStatus[organ]!;
+    if (current == null) return 'nodata';
+    if (base == null || base === 0) return 'recorded';
+    const change = Math.abs(current - base) / Math.abs(base);
+    return change >= .2 ? 'priority' : change >= .1 ? 'review' : 'nominal';
+  };
+  const statusLabel = (status: TwinStatus) => ({ nominal: 'Within personal range', review: 'Review trend', priority: 'Priority review', recorded: 'Recorded', nodata: 'No data' }[status]);
 
   const organData: Record<
     OrganKey,
@@ -55,7 +68,7 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
       icon: any;
       metricLabel: string;
       value: string;
-      status: 'Review trend' | 'No data';
+      status: TwinStatus;
       color: string;
       bg: string;
       glowColor: string;
@@ -67,7 +80,7 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
       icon: Heart,
       metricLabel: 'Resting Heart Rate',
       value: hr == null ? 'No measurement' : `${hr.toFixed(1)} BPM`,
-      status: hr == null ? 'No data' : 'Review trend',
+      status: statusFor('heart', hr, baselines.heartRate),
       color: '#ef4444',
       bg: 'rgba(239, 68, 68, 0.12)',
       glowColor: 'rgba(239, 68, 68, 0.6)',
@@ -79,7 +92,7 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
       icon: Wind,
       metricLabel: 'Gas Exchange & Cabin CO2',
       value: co2 == null ? 'No measurement' : `${co2.toFixed(2)} recorded units`,
-      status: co2 == null ? 'No data' : 'Review trend',
+      status: statusFor('lungs', co2 ?? vitals.spo2 ?? vitals.respiration, baselines.cabinCo2 ?? baselines.spo2 ?? baselines.respiration),
       color: '#06b6d4',
       bg: 'rgba(6, 182, 212, 0.12)',
       glowColor: 'rgba(6, 182, 212, 0.6)',
@@ -91,7 +104,7 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
       icon: Brain,
       metricLabel: 'Sleep Duration & Fatigue',
       value: `${sleep == null ? '—' : `${sleep.toFixed(1)} hrs`} · Fatigue ${fatigue == null ? '—' : `${fatigue}/10`}`,
-      status: sleep == null && fatigue == null ? 'No data' : 'Review trend',
+      status: statusFor('brain', sleep ?? fatigue, baselines.sleepHours ?? baselines.fatigue),
       color: '#8b5cf6',
       bg: 'rgba(139, 92, 246, 0.12)',
       glowColor: 'rgba(139, 92, 246, 0.6)',
@@ -103,7 +116,7 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
       icon: Activity,
       metricLabel: 'Grip Strength & Bone Load',
       value: grip == null ? 'No measurement' : `${grip.toFixed(1)} kg force`,
-      status: grip == null ? 'No data' : 'Review trend',
+      status: statusFor('muscles', grip, baselines.grip),
       color: '#10b981',
       bg: 'rgba(16, 185, 129, 0.12)',
       glowColor: 'rgba(16, 185, 129, 0.6)',
@@ -115,7 +128,7 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
       icon: Shield,
       metricLabel: 'Core Temperature · Environmental Radiation Context',
       value: temp == null ? 'No measurement' : `${temp.toFixed(1)} °C`,
-      status: temp == null ? 'No data' : 'Review trend',
+      status: statusFor('immune', temp, baselines.coreTemp),
       color: '#f59e0b',
       bg: 'rgba(245, 158, 11, 0.12)',
       glowColor: 'rgba(245, 158, 11, 0.6)',
@@ -134,6 +147,7 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
           <p className="digital-twin-subtitle">
             Prototype visualization of recorded measurements and self-reports. It does not model or predict organ function.
           </p>
+          <p className="digital-twin-subtitle">{missionDay ? `Mission day ${missionDay} · ` : ''}{dataSource} data provenance</p>
         </div>
         <button
           type="button"
@@ -581,28 +595,6 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
             </g>
           </svg>
 
-          {/* ClyHealth Heart Floating Badge: 72% */}
-          <div
-            className={`cly-hotspot-pill heart-cly-pill ${selectedOrgan === 'heart' ? 'active' : ''}`}
-            style={{ top: '34%', left: '58%' }}
-            onClick={() => onSelectOrgan('heart')}
-            title="Cardiovascular System (Click to inspect)"
-          >
-            <span className="cly-pill-dot orange-dot" />
-            <span className="cly-pill-num">72%</span>
-          </div>
-
-          {/* ClyHealth Liver/Abdomen Floating Badge: 15% */}
-          <div
-            className={`cly-hotspot-pill liver-cly-pill ${selectedOrgan === 'immune' ? 'active' : ''}`}
-            style={{ top: '44%', left: '28%' }}
-            onClick={() => onSelectOrgan('immune')}
-            title="Metabolic & Hepatic System (Click to inspect)"
-          >
-            <span className="cly-pill-dot blue-dot" />
-            <span className="cly-pill-num">15%</span>
-          </div>
-
           {/* Floating Zoom & Fit Controls (Bottom Left) */}
           <div className="cly-floating-controls-left">
             <button
@@ -655,8 +647,8 @@ export const DigitalTwinViewer: React.FC<DigitalTwinProps> = ({
               {active.metricLabel}: <b>{active.value}</b>
             </div>
           </div>
-          <span className={`status-pill ${active.status.toLowerCase().replace(' ', '-')}`}>
-            {active.status}
+          <span className={`status-pill ${active.status}`}>
+            {statusLabel(active.status)}
           </span>
         </div>
         <p className="organ-banner-desc">{active.description}</p>

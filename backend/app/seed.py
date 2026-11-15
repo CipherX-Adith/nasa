@@ -19,6 +19,9 @@ def seed(db):
         ("cardiovascular", "Resting heart rate", "bpm", 65.4),
         ("cardiovascular", "HRV", "ms", 65.0),
         ("cardiovascular", "Systolic BP", "mmHg", 118.0),
+        ("cardiovascular", "Diastolic blood pressure", "mmHg", 76.0),
+        ("cardiovascular", "SpO2", "%", 98.0),
+        ("cardiovascular", "Respiration rate", "breaths/min", 14.0),
         ("immune", "Core Temp", "°C", 36.7),
         ("musculoskeletal", "Grip", "kg", 48.0),
         ("musculoskeletal", "Body mass", "kg", 74.0),
@@ -29,6 +32,7 @@ def seed(db):
         ("behavioural", "Mood", "/10", 7.6),
         ("radiation_environment", "Cabin CO2", "mmHg", 2.5),
         ("radiation_environment", "Radiation dose rate", "mSv/day", 0.42),
+        ("radiation_environment", "Cumulative radiation dose", "mSv", 17.64),
     ]
 
     # Explicitly synthetic scenario data for the Mars Transit demo. These
@@ -38,9 +42,8 @@ def seed(db):
         1: 65.4, 2: 65.8, 3: 65.1, 4: 66.2, 5: 65.4, 6: 64.9, 7: 65.7, 8: 66.5, 9: 65.0, 10: 64.8,
         11: 65.3, 12: 66.1, 13: 65.5, 14: 64.9, 15: 65.4, 16: 65.9, 17: 64.7, 18: 65.3, 19: 66.4, 20: 65.8,
         21: 65.2, 22: 64.8, 23: 65.6, 24: 66.3, 25: 65.4, 26: 64.7, 27: 65.9, 28: 65.1, 29: 64.2, 30: 63.4,
-        31: 64.8, 32: 66.1, 33: 65.5, 34: 66.8, 35: 67.4, 36: 67.9, 37: 68.4, 38: 69.5, 39: 68.8, 40: 69.1,
-        41: 69.4, 42: 68.9, 43: 70.1, 44: 70.8, 45: 72.0, 46: 71.4, 47: 71.1, 48: 70.8, 49: 72.3, 50: 73.2,
-        40: 76.0, 41: 79.0, 42: 82.0
+        31: 64.8, 32: 66.1, 33: 65.5, 34: 66.8, 35: 67.4, 36: 67.9, 37: 68.4, 38: 69.5, 39: 68.8,
+        40: 76.0, 41: 79.0, 42: 82.0,
     }
 
     for ai, a in enumerate(astronauts):
@@ -90,8 +93,6 @@ def seed(db):
                 elif metric == "Sleep quality" and ai == 0:
                     if day_idx <= 39:
                         val = 7.5 + math.cos(day_idx * 0.6) * 0.5
-                    elif day_idx <= 39:
-                        val = 7.0 - min((day_idx - 35) * 0.18, 4.0) + math.sin(day_idx) * 0.3
                     else: val = 3.0
                 elif metric == "Stress" and ai == 0:
                     if day_idx <= 35:
@@ -104,15 +105,10 @@ def seed(db):
                     else:
                         val = 7.5 - min((day_idx - 35) * 0.14, 3.2) + math.cos(day_idx) * 0.3
                 else:
-                    # Generic simulated pattern
-                    drift = ((day_idx * 7 + ai * 3) % 7) - 3
+                    # Deterministic, non-repeating synthetic variation.
+                    drift = math.sin(day_idx * 0.73 + ai * 1.91) * 2.1 + math.cos(day_idx * 0.19 + ai) * 0.9
                     scale = 0.15 if unit not in ("bpm", "ms", "hours", "/10", "mmHg", "kg") else 1.0
                     val = base + drift * scale
-                    if ai == 0 and day_idx > 50:
-                        if metric == "Sleep duration":
-                            val = 5.0
-                        elif metric == "Fatigue":
-                            val = 7.0
 
                 db.add(
                     Measurement(
