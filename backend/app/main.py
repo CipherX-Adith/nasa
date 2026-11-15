@@ -983,9 +983,25 @@ def get_countermeasures(aid: int, date: str | None = None, db: Session = Depends
     catalog = [{**item, "check": serialize(by_key[item["key"]]) if item["key"] in by_key else None} for item in COUNTERMEASURE_CATALOG]
     completed = sum(bool(item["check"] and item["check"]["completed"]) for item in catalog)
     history_rows = db.query(CountermeasureCheck).filter_by(astronaut_id=aid).order_by(desc(CountermeasureCheck.session_date)).limit(56).all()
+    completion_by_day = {}
+    for item in history_rows:
+        completion_by_day.setdefault(item.session_date, set())
+        if item.completed:
+            completion_by_day[item.session_date].add(item.protocol_key)
+    required_keys = {item["key"] for item in COUNTERMEASURE_CATALOG}
+    complete_days = {day for day, keys in completion_by_day.items() if required_keys.issubset(keys)}
+    streak = 0
+    streak_day = session_day
+    while streak_day in complete_days:
+        streak += 1
+        streak_day -= timedelta(days=1)
+    week_start = session_day - timedelta(days=6)
+    weekly_complete_days = sum(1 for day in complete_days if week_start <= day <= session_day)
     return {"date": session_day.isoformat(), "items": catalog, "completed_count": completed,
             "total_count": len(catalog), "completion_percent": round(100 * completed / len(catalog)),
-            "illustrative": True, "history": [serialize(x) for x in history_rows]}
+            "illustrative": True, "history": [serialize(x) for x in history_rows],
+            "gamification": {"current_streak": streak, "weekly_complete_days": weekly_complete_days,
+                              "available_history_days": len(completion_by_day), "complete_dates": [day.isoformat() for day in sorted(complete_days, reverse=True)]}}
 
 @app.put("/api/astronauts/{aid}/countermeasures/{protocol_key}")
 def update_countermeasure(aid: int, protocol_key: str, data: CountermeasureUpdate, date: str | None = None,
@@ -1031,6 +1047,7 @@ def add_medical_record(aid: int, data: MedicalRecordIn, db: Session = Depends(ge
         findings=data.findings,
         countermeasures=data.countermeasures,
         status="Pending clinician review",
+        simulated=data.record_type.lower().startswith("simulated "),
         date=data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         timestamp=datetime.now(timezone.utc)
     )
