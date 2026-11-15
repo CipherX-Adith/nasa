@@ -2891,9 +2891,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Mission Telemetry Trend Graph - Hero Feature */}
-              {renderTelemetryCard()}
-
               <DigitalTwinViewer
                 selectedOrgan={selectedOrgan}
                 onSelectOrgan={handleSelectOrgan}
@@ -2903,6 +2900,9 @@ export default function App() {
                 missionDay={42}
                 dataSource={astronaut?.simulated === false ? 'real' : 'simulated'}
               />
+
+              {/* Mission Telemetry Trend Graph - Hero Feature */}
+              {renderTelemetryCard()}
 
               {/* SOLID CURVED QUICK JUMP DOCK */}
               <div className="overview-quick-dock">
